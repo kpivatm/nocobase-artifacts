@@ -37,6 +37,17 @@ if [[ "${CI:-}" != "true" && "$YES_FLAG" != "--yes" ]]; then
   [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
 fi
 
+# Configure nb CLI session in CI (no persisted session in fresh runner)
+if [[ "${CI:-}" == "true" ]]; then
+  echo "[nb] Setting up CLI session for CI..."
+  NB_ENV_NAME="${ENV}-ci"
+  nb env init "$NB_ENV_NAME" --url "$NOCOBASE_URL" --yes 2>/dev/null || true
+  nb env auth "$NB_ENV_NAME" --auth-type basic \
+    --username "${NOCOBASE_EMAIL}" --password "${NOCOBASE_PASSWORD}" 2>&1 \
+    | grep -E "Authenticated|Error|failed" || true
+  nb env use "$NB_ENV_NAME" 2>/dev/null || true
+fi
+
 # Tạo revision TRƯỚC khi apply (rollback point)
 echo "[0] Creating revision snapshot (pre-deploy)..."
 REVISION_NOTE="pre-deploy-${MODULE}-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
