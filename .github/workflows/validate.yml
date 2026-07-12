@@ -1,0 +1,31 @@
+name: Validate Artifacts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'scripts/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON blueprints
+        run: |
+          find modules -name "*.json" | while read f; do
+            echo "Validating: $f"
+            python3 -m json.tool "$f" > /dev/null || { echo "INVALID JSON: $f"; exit 1; }
+          done
+          echo "All JSON files are valid."
+
+      - name: Check no .env files committed
+        run: |
+          if find . -name "*.env" -not -name "*.env.example" | grep -q .; then
+            echo "ERROR: .env files should not be committed!"
+            find . -name "*.env" -not -name "*.env.example"
+            exit 1
+          fi
+          echo "No .env files found."

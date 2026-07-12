@@ -1,0 +1,48 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Module to deploy (e.g. kpi)'
+        required: true
+        default: 'kpi'
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up nb CLI
+        run: |
+          # Install NocoBase CLI (nb) — update version as needed
+          # npm install -g @nocobase/cli
+          echo "nb CLI setup placeholder"
+
+      - name: Create revision snapshot (pre-deploy)
+        run: |
+          echo "Creating pre-deploy revision..."
+          # nb revision create --note "pre-deploy-staging-$(git rev-parse --short HEAD)"
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          NOCOBASE_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
+
+      - name: Apply artifacts to Staging
+        run: |
+          MODULE="${{ github.event.inputs.module || 'kpi' }}"
+          echo "Applying module: $MODULE to staging..."
+          # bash scripts/apply.sh "$MODULE" staging
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          NOCOBASE_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
+
+  # Prod deploy is separate — requires manual trigger + environment protection
+  # See: .github/workflows/deploy-prod.yml (to be created when prod is ready)
