@@ -9,10 +9,11 @@ Lần export cuối: 2026-07-12 từ env `dev`.
 1. `collections/` — Data model (kpi_groups trước, rồi kpi_catalog, rồi các bảng phụ)
 2. `blueprints/` — Page blueprints (`apply-blueprint --mode replace`)
 3. `js-blocks/` — Tham chiếu để review/diff; block source đã nhúng trong blueprint
-4. `workflows/` — Apply từng file `*.enabled.json` (disable theo mặc định, enable sau khi verify)
-5. `acl/` — Cấu hình roles và permissions thủ công qua NocoBase UI
+4. `workflows/` — Apply từng file `*.enabled.json` kèm nodes chain (script tự động)
+5. `acl/` — Roles + permissions với action grants đầy đủ (script tự động)
 
-Script đầy đủ: `bash scripts/apply.sh kpi dev`
+Script đầy đủ: `bash scripts/apply.sh kpi staging --yes`  
+CI: set `NOCOBASE_URL`, `NOCOBASE_EMAIL`, `NOCOBASE_PASSWORD` as secrets; `CI=true` bỏ qua prompt.
 
 ## Collections
 
@@ -33,7 +34,7 @@ Script đầy đủ: `bash scripts/apply.sh kpi dev`
 
 | File | Mô tả | Kích thước |
 |---|---|---|
-| `kpi-catalog.block.js` | KpiViewSwitcher + BSC Quadrant View + Card Grid (KPI-26/27) | ~23KB |
+| `kpi-catalog.block.js` | KpiViewSwitcher + BSC Quadrant View + Card Grid | ~23KB |
 
 > File này tách ra từ blueprint để review/diff dễ hơn. Không apply riêng — apply qua blueprint.
 
@@ -41,18 +42,31 @@ Script đầy đủ: `bash scripts/apply.sh kpi dev`
 
 20 workflows (6 enabled, 14 disabled). Xem `all-workflows.json` để biết danh sách đầy đủ.
 
-Enabled:
-- KPI-WF01: Thông báo đề xuất mới cho Quản trị
-- KPI-WF02: Thông báo từ chối đề xuất
-- KPI-WF01b: Thông báo CB Quản lý khi thêm KPI
-- KPI-WF02b: Thông báo CB Quản lý khi sửa KPI
-- KPI-WF-DISABLE-STATUS: Thông báo khi Tắt KPI
-- KPI-WF05: Kiểm tra tổng trọng số BSC = 100%
+**Filename format:** `{kpi-prefix}-{workflow-id}.{enabled|disabled}.json`  
+Dùng workflow ID (numeric) để đảm bảo unique — NocoBase dùng chung `key` cho các version của cùng workflow.
+
+Enabled (6):
+- `kpi-wf01-*.enabled.json` — Thông báo đề xuất mới cho Quản trị
+- `kpi-wf02-*.enabled.json` — Thông báo từ chối đề xuất
+- `kpi-wf01b-*374951172243456*.enabled.json` — Thông báo CB Quản lý khi thêm KPI
+- `kpi-wf02b-*.enabled.json` — Thông báo CB Quản lý khi sửa KPI
+- `kpi-wf-disable-status-*.enabled.json` — Thông báo khi Tắt KPI
+- `kpi-wf05-*374958382252032*.enabled.json` — Kiểm tra tổng trọng số BSC = 100%
+
+**Lưu ý:** Một số workflow tồn tại 2 version (cùng prefix, khác ID) — các version cũ `disabled` là dev history, không apply lên fresh instance.
 
 ## ACL
 
-4 custom roles: `sysadmin`, `manager`, `leader`, `specialist`.
-Xem `role-*-resources.json` để biết permissions chi tiết.
+4 custom roles: `sysadmin`, `manager`, `leader`, `specialist`.  
+Core NocoBase roles (`admin`, `member`, `root`) đã lọc ra khỏi `roles.json`.
+
+**Cấu trúc:**
+- `roles.json` — 4 KPI custom roles
+- `roles-with-permissions.json` — Full role objects from API
+- `role-*-resources.json` — Legacy resource list (reference)
+- `resources/role-{role}-{collection}.json` — **Action grants đầy đủ** (dùng bởi apply.sh):
+  - `usingActionsConfig: true`
+  - `actions`: mảng `{name, fields}` per action
 
 ## Dependency
 

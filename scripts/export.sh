@@ -66,21 +66,54 @@ if [[ "$MODULE" == "kpi" ]]; then
       let d=''; process.stdin.on('data',c=>d+=c);
       process.stdin.on('end',()=>{
         const w=JSON.parse(d).data;
-        const slug=(w.title||w.id).replace(/[^a-zA-Z0-9-_]/g,'-').replace(/-+/g,'-').toLowerCase();
-        console.log(slug+'.'+(w.enabled?'enabled':'disabled')+'.json');
+        // Use KPI-WFxx prefix (before ':') + numeric ID for stable unique names
+        const prefix=(w.title||'').split(':')[0].trim()
+          .replace(/[^a-zA-Z0-9]/g,'-').replace(/-+/g,'-').toLowerCase();
+        const status=w.enabled?'enabled':'disabled';
+        console.log(prefix+'-'+w.id+'.'+status+'.json');
       });" 2>/dev/null || echo "workflow-${WF_ID}.json")
     echo "$WF_JSON" > "$MODULE_DIR/workflows/$FNAME"
     echo "  ✓ $FNAME"
   done
 
-  # 4. ACL roles
+  # 3b. Workflow filenames: {kpi-key}-{workflow-id}.{status}.json for stable, unique names
+  # (already handled above in the loop)
+
+  # 4. ACL roles — export with full action grants per collection
   echo "[4/4] Exporting ACL..."
-  nb api resource list --resource roles -j > "$MODULE_DIR/acl/roles.json" && echo "  ✓ roles.json"
+  # roles.json: only the 4 KPI-specific roles (filter out core NocoBase roles)
+  KPI_ROLES="sysadmin manager leader specialist"
+  KPI_COLLS="kpi_groups kpi_catalog kpi_change_history kpi_proposals"
+
+  nb api resource list --resource roles -j | node -e "
+    let d=''; process.stdin.on('data',c=>d+=c);
+    process.stdin.on('end',()=>{
+      const kpiRoles=['sysadmin','manager','leader','specialist'];
+      const all=JSON.parse(d);
+      all.data=(all.data||[]).filter(r=>kpiRoles.includes(r.name));
+      console.log(JSON.stringify(all,null,2));
+    });" > "$MODULE_DIR/acl/roles.json" && echo "  ✓ roles.json (KPI roles only)"
+
   nb api acl roles list -j > "$MODULE_DIR/acl/roles-with-permissions.json" && echo "  ✓ roles-with-permissions.json"
-  for ROLE in sysadmin manager leader specialist; do
+
+  # Per-role legacy resource list (reference only)
+  for ROLE in $KPI_ROLES; do
     nb api resource list --resource "roles/${ROLE}/resources" -j \
       > "$MODULE_DIR/acl/role-${ROLE}-resources.json" 2>/dev/null \
       && echo "  ✓ role-${ROLE}-resources.json" || true
+  done
+
+  # Per-role per-collection with full action grants (used by apply.sh)
+  mkdir -p "$MODULE_DIR/acl/resources"
+  for ROLE in $KPI_ROLES; do
+    for COLL in $KPI_COLLS; do
+      OUT="$MODULE_DIR/acl/resources/role-${ROLE}-${COLL}.json"
+      nb api acl roles data-source-resources get \
+        --role-name "$ROLE" --name "$COLL" --data-source-key main --appends actions -j \
+        > "$OUT" 2>/dev/null \
+        && echo "  ✓ resources/role-${ROLE}-${COLL}.json" \
+        || echo "  ⚠ resources/role-${ROLE}-${COLL}.json (no data)"
+    done
   done
 
 else

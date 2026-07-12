@@ -1,0 +1,12 @@
+{
+  "data": {
+    "id": 374923345133574,
+    "createdAt": "2026-07-11T20:23:02.361Z",
+    "updatedAt": "2026-07-11T20:23:02.361Z",
+    "dataSourceKey": "main",
+    "roleName": "leader",
+    "name": "kpi_proposals",
+    "usingActionsConfig": true,
+    "actions": []
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "data": {
+    "id": 374923345133568,
+    "createdAt": "2026-07-11T20:23:02.272Z",
+    "updatedAt": "2026-07-11T20:23:02.272Z",
+    "dataSourceKey": "main",
+    "roleName": "leader",
+    "name": "kpi_groups",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923345133569,
+        "createdAt": "2026-07-11T20:23:02.279Z",
+        "updatedAt": "2026-07-11T20:23:02.279Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923345133568
+      }
+    ]
+  }
+}

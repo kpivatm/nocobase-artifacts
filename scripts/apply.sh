@@ -1,28 +1,41 @@
 #!/usr/bin/env bash
 # Apply NocoBase artifacts lên instance chỉ định.
-# Usage: ./scripts/apply.sh [module] [env]
+# Usage: ./scripts/apply.sh [module] [env] [--yes]
 # Example: ./scripts/apply.sh kpi staging
+# CI: set CI=true or pass --yes to skip interactive prompt; set env vars directly instead of .env file.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODULE="${1:-kpi}"
 ENV="${2:-staging}"
+YES_FLAG="${3:-}"
+
+# CI-compatible env loading: .env file is optional; fall back to environment variables
 ENV_FILE="$REPO_ROOT/envs/${ENV}.env"
-
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ERROR: $ENV_FILE not found. Copy envs/${ENV}.env.example → envs/${ENV}.env and fill in values."
-  exit 1
+if [[ -f "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+else
+  # In CI the env file is gitignored; vars must come from the environment (GitHub Actions secrets, etc.)
+  if [[ -z "${NOCOBASE_URL:-}" || -z "${NOCOBASE_EMAIL:-}" || -z "${NOCOBASE_PASSWORD:-}" ]]; then
+    echo "ERROR: $ENV_FILE not found and NOCOBASE_URL / NOCOBASE_EMAIL / NOCOBASE_PASSWORD not set."
+    echo "  Local: copy envs/${ENV}.env.example → envs/${ENV}.env and fill in values."
+    echo "  CI: set these as environment variables / secrets."
+    exit 1
+  fi
 fi
-
-source "$ENV_FILE"
 
 MODULE_DIR="$REPO_ROOT/modules/$MODULE"
 echo "=== Apply artifacts: module=$MODULE env=$ENV ==="
 echo "    NocoBase: $NOCOBASE_URL"
 echo ""
-read -p "Tiếp tục apply lên env '$ENV'? [y/N] " CONFIRM
-[[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
+
+# Skip confirmation when CI=true or --yes flag passed
+if [[ "${CI:-}" != "true" && "$YES_FLAG" != "--yes" ]]; then
+  read -r -p "Tiếp tục apply lên env '$ENV'? [y/N] " CONFIRM
+  [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
+fi
 
 # Tạo revision TRƯỚC khi apply (rollback point)
 echo "[0] Creating revision snapshot (pre-deploy)..."
@@ -60,27 +73,168 @@ if [[ "$MODULE" == "kpi" ]]; then
     --body-file "$MODULE_DIR/blueprints/kpi_dmc_page.blueprint.json" \
     && echo "  ✓ kpi_dmc_page (Danh mục KPI)"
 
-  # Step 4 — Workflows (enabled only, fresh instance)
+  # Step 4 — Workflows (enabled only, preserving node chain)
   echo ""
-  echo "[4/5] Applying workflows (enabled, fresh instance only)..."
+  echo "[4/5] Applying workflows (enabled, import with nodes)..."
   echo "  ⚠ Skip on existing instance where workflows already exist."
+
+  # Write node-import helper script to a temp file to avoid shell quoting issues
+  TMPSCRIPT=$(mktemp /tmp/wf_import_XXXXXX.js)
+  cat > "$TMPSCRIPT" << 'JSEOF'
+const fs = require('fs');
+const { execSync } = require('child_process');
+
+const wfFile = process.argv[2];
+const wfData = JSON.parse(fs.readFileSync(wfFile)).data;
+const nodes = wfData.nodes || [];
+
+// Create workflow record (disabled — enable manually after verification)
+const wfBody = {
+  title: wfData.title,
+  type: wfData.type,
+  triggerType: wfData.triggerType,
+  config: wfData.config,
+  enabled: false
+};
+const bodyFile = fs.mkdtempSync('/tmp/wf') + '/body.json';
+fs.writeFileSync(bodyFile, JSON.stringify(wfBody));
+
+let createOut;
+try {
+  createOut = execSync(
+    `nb api resource create --resource workflows --body-file "${bodyFile}" -j`,
+    { encoding: 'utf8' }
+  );
+} catch (e) {
+  console.error('  ✗ Failed to create workflow: ' + e.message);
+  process.exit(1);
+}
+fs.unlinkSync(bodyFile);
+
+const newWfId = JSON.parse(createOut).data.id;
+console.log(`  ✓ Created workflow id=${newWfId}: ${wfData.title}`);
+
+if (!nodes.length) {
+  console.log('    (no nodes)');
+  process.exit(0);
+}
+
+// Topological walk: start from root (upstreamId === null), follow downstreamId
+const byId = {};
+nodes.forEach(n => { byId[n.id] = n; });
+const idMap = {};  // old id → new id
+
+let current = nodes.find(n => n.upstreamId === null);
+while (current) {
+  const nodeBody = {
+    type: current.type,
+    title: current.title,
+    config: current.config,
+    branchIndex: current.branchIndex,
+    upstreamId: current.upstreamId != null ? idMap[current.upstreamId] : null
+  };
+  const nBodyFile = fs.mkdtempSync('/tmp/nd') + '/node.json';
+  fs.writeFileSync(nBodyFile, JSON.stringify(nodeBody));
+  try {
+    const nodeOut = execSync(
+      `nb api resource create --resource "workflows/${newWfId}/nodes" --body-file "${nBodyFile}" -j`,
+      { encoding: 'utf8' }
+    );
+    const newNodeId = JSON.parse(nodeOut).data.id;
+    idMap[current.id] = newNodeId;
+    console.log(`    ✓ Node ${current.type}: ${current.title || '(untitled)'}`);
+  } catch (e) {
+    console.error(`    ✗ Node ${current.type} failed: ` + e.message);
+  }
+  fs.unlinkSync(nBodyFile);
+  current = current.downstreamId ? byId[current.downstreamId] : null;
+}
+JSEOF
+
   for WF_FILE in "$MODULE_DIR/workflows/"*.enabled.json; do
     [[ -f "$WF_FILE" ]] || continue
-    TITLE=$(node -e "const d=JSON.parse(require('fs').readFileSync('$WF_FILE'));console.log(d.data?.title||'?')" 2>/dev/null || echo "?")
-    echo "  → $TITLE"
-    node -e "
-      const fs=require('fs'), w=JSON.parse(fs.readFileSync('$WF_FILE')).data;
-      process.stdout.write(JSON.stringify({title:w.title,type:w.type,triggerType:w.triggerType,config:w.config,enabled:false}));
-    " | nb api resource create --resource workflows --body-stdin 2>/dev/null \
-      && echo "    ✓ Created (disabled — enable manually after verification)" \
-      || echo "    ⚠ Skipped (may already exist)"
+    node "$TMPSCRIPT" "$WF_FILE" 2>&1 || echo "    ⚠ Skipped (may already exist)"
+  done
+  rm -f "$TMPSCRIPT"
+
+  # Step 5 — ACL roles and permissions
+  echo ""
+  echo "[5/5] Applying ACL roles and permissions..."
+  KPI_ROLES="sysadmin manager leader specialist"
+  KPI_COLLS="kpi_groups kpi_catalog kpi_change_history kpi_proposals"
+
+  # Ensure roles exist
+  for ROLE in $KPI_ROLES; do
+    ROLE_FILE="$MODULE_DIR/acl/roles-with-permissions.json"
+    if [[ -f "$ROLE_FILE" ]]; then
+      ROLE_TITLE=$(node -e "
+        const d=JSON.parse(require('fs').readFileSync('$ROLE_FILE'));
+        const r=(d.data||[]).find(r=>r.name==='$ROLE');
+        console.log(r?r.title:'');
+      " 2>/dev/null || echo "")
+      BODY="{\"name\":\"$ROLE\",\"title\":\"${ROLE_TITLE:-$ROLE}\"}"
+      RBODY=$(mktemp /tmp/role_XXXXXX.json)
+      echo "$BODY" > "$RBODY"
+      nb api resource create --resource roles --body-file "$RBODY" -j >/dev/null 2>&1 \
+        && echo "  ✓ Role created: $ROLE" \
+        || echo "  ✓ Role exists: $ROLE (skipped)"
+      rm -f "$RBODY"
+    fi
   done
 
-  # Step 5 — ACL (manual)
-  echo ""
-  echo "[5/5] ACL roles..."
-  echo "  Custom roles: sysadmin, manager, leader, specialist"
-  echo "  → Configure via NocoBase UI (Settings > Access Control) using acl/role-*-resources.json as reference."
+  # Apply per-collection permissions with action grants
+  for ROLE in $KPI_ROLES; do
+    for COLL in $KPI_COLLS; do
+      RES_FILE="$MODULE_DIR/acl/resources/role-${ROLE}-${COLL}.json"
+      [[ -f "$RES_FILE" ]] || { echo "  ⚠ Missing: $RES_FILE"; continue; }
+
+      TMPNODE=$(mktemp /tmp/aclbody_XXXXXX.js)
+      cat > "$TMPNODE" << 'ACLEOF'
+const fs = require('fs');
+const { execSync } = require('child_process');
+const resFile = process.argv[2];
+const role = process.argv[3];
+const coll = process.argv[4];
+
+const d = JSON.parse(fs.readFileSync(resFile)).data;
+const actions = (d.actions || []).map(a => ({
+  name: a.name,
+  fields: a.fields || [],
+  scopeId: undefined   // scopeId is env-specific, omit for portability
+}));
+
+const body = {
+  name: coll,
+  usingActionsConfig: d.usingActionsConfig !== false,
+  actions
+};
+const bf = fs.mkdtempSync('/tmp/acl') + '/body.json';
+fs.writeFileSync(bf, JSON.stringify(body));
+
+try {
+  // Try create first, fall back to update if already exists
+  execSync(
+    `nb api acl roles data-source-resources create --role-name "${role}" --data-source-key main --body-file "${bf}" -j`,
+    { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }
+  );
+  console.log(`  ✓ ACL ${role}/${coll}`);
+} catch {
+  try {
+    execSync(
+      `nb api acl roles data-source-resources update --role-name "${role}" --name "${coll}" --data-source-key main --body-file "${bf}" -j`,
+      { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }
+    );
+    console.log(`  ✓ ACL updated ${role}/${coll}`);
+  } catch (e2) {
+    console.error(`  ⚠ ACL ${role}/${coll} skipped: ` + e2.message.slice(0,120));
+  }
+}
+fs.unlinkSync(bf);
+ACLEOF
+      node "$TMPNODE" "$RES_FILE" "$ROLE" "$COLL" 2>&1
+      rm -f "$TMPNODE"
+    done
+  done
 
 else
   echo "ERROR: Unknown module '$MODULE'. Add apply logic for it in scripts/apply.sh."
@@ -90,4 +244,5 @@ fi
 echo ""
 echo "=== Apply complete ==="
 echo "Verify: $NOCOBASE_URL/admin"
-echo "Rollback: bash scripts/rollback.sh $REVISION_NOTE"
+echo "Next: enable workflows via NocoBase UI after verifying each one."
+echo "Rollback: nb revision restore $REVISION_NOTE"

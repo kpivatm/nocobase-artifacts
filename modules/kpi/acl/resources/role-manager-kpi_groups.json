@@ -1,0 +1,47 @@
+{
+  "data": {
+    "id": 374923317870592,
+    "createdAt": "2026-07-11T20:22:49.146Z",
+    "updatedAt": "2026-07-11T20:22:49.146Z",
+    "dataSourceKey": "main",
+    "roleName": "manager",
+    "name": "kpi_groups",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923317870593,
+        "createdAt": "2026-07-11T20:22:49.151Z",
+        "updatedAt": "2026-07-11T20:22:49.151Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870592
+      },
+      {
+        "id": 374923317870594,
+        "createdAt": "2026-07-11T20:22:49.158Z",
+        "updatedAt": "2026-07-11T20:22:49.158Z",
+        "name": "export",
+        "fields": [
+          "code",
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870592
+      }
+    ]
+  }
+}

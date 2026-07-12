@@ -1,0 +1,65 @@
+{
+  "data": {
+    "id": 374923292704780,
+    "createdAt": "2026-07-11T20:22:37.130Z",
+    "updatedAt": "2026-07-11T20:22:37.130Z",
+    "dataSourceKey": "main",
+    "roleName": "sysadmin",
+    "name": "kpi_change_history",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374957885227008,
+        "createdAt": "2026-07-12T00:57:32.707Z",
+        "updatedAt": "2026-07-12T04:14:20.198Z",
+        "name": "view",
+        "fields": [
+          "changed_at",
+          "changed_by",
+          "changed_field",
+          "createdAt",
+          "createdBy",
+          "id",
+          "kpi",
+          "kpiId",
+          "new_value",
+          "next_version",
+          "nv",
+          "old_value",
+          "reason",
+          "updatedAt",
+          "updatedBy",
+          "version"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923292704780
+      },
+      {
+        "id": 374957885227009,
+        "createdAt": "2026-07-12T00:57:32.713Z",
+        "updatedAt": "2026-07-12T04:14:20.210Z",
+        "name": "create",
+        "fields": [
+          "changed_at",
+          "changed_by",
+          "changed_field",
+          "createdAt",
+          "createdBy",
+          "id",
+          "kpi",
+          "kpiId",
+          "new_value",
+          "next_version",
+          "nv",
+          "old_value",
+          "reason",
+          "updatedAt",
+          "updatedBy",
+          "version"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923292704780
+      }
+    ]
+  }
+}

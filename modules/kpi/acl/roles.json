@@ -1,34 +1,6 @@
 {
   "data": [
     {
-      "createdAt": "2026-07-09T08:21:35.021Z",
-      "updatedAt": "2026-07-09T08:21:36.966Z",
-      "name": "admin",
-      "title": "{{t(\"Admin\")}}",
-      "description": null,
-      "strategy": {
-        "actions": [
-          "create",
-          "view",
-          "update",
-          "destroy",
-          "export",
-          "importXlsx"
-        ]
-      },
-      "default": false,
-      "hidden": false,
-      "allowConfigure": true,
-      "allowNewMenu": true,
-      "snippets": [
-        "pm",
-        "pm.*",
-        "ui.*"
-      ],
-      "allowNewMobileMenu": true,
-      "allowNewAiEmployee": true
-    },
-    {
       "createdAt": "2026-07-11T20:21:31.495Z",
       "updatedAt": "2026-07-11T20:21:31.495Z",
       "name": "leader",
@@ -71,48 +43,6 @@
         "!pm",
         "!pm.*",
         "!ui.*"
-      ],
-      "allowNewMobileMenu": false,
-      "allowNewAiEmployee": true
-    },
-    {
-      "createdAt": "2026-07-09T08:21:35.048Z",
-      "updatedAt": "2026-07-09T08:21:35.048Z",
-      "name": "member",
-      "title": "{{t(\"Member\")}}",
-      "description": null,
-      "strategy": {
-        "actions": [
-          "view:own"
-        ]
-      },
-      "default": true,
-      "hidden": false,
-      "allowConfigure": null,
-      "allowNewMenu": true,
-      "snippets": [
-        "!pm",
-        "!pm.*",
-        "!ui.*"
-      ],
-      "allowNewMobileMenu": true,
-      "allowNewAiEmployee": true
-    },
-    {
-      "createdAt": "2026-07-09T08:21:34.987Z",
-      "updatedAt": "2026-07-09T08:21:34.987Z",
-      "name": "root",
-      "title": "{{t(\"Root\")}}",
-      "description": null,
-      "strategy": null,
-      "default": false,
-      "hidden": true,
-      "allowConfigure": null,
-      "allowNewMenu": false,
-      "snippets": [
-        "pm",
-        "pm.*",
-        "ui.*"
       ],
       "allowNewMobileMenu": false,
       "allowNewAiEmployee": true
