@@ -119,14 +119,28 @@ if (!nodes.length) {
   process.exit(0);
 }
 
-// Topological walk: start from root (upstreamId === null), follow downstreamId
+// Topological sort: process nodes in order where each node's upstream is already processed.
+// Handles linear chains AND condition branches (nodes with branchIndex, multiple children of one upstream).
 const byId = {};
 nodes.forEach(n => { byId[n.id] = n; });
 const idMap = {};  // old id → new id
 
-let current = nodes.find(n => n.upstreamId === null);
-while (current) {
+// BFS from roots (upstreamId === null); each processed node enqueues its children
+const queue = nodes.filter(n => n.upstreamId === null);
+const visited = new Set();
+const ordered = [];
+while (queue.length) {
+  const node = queue.shift();
+  if (visited.has(node.id)) continue;
+  visited.add(node.id);
+  ordered.push(node);
+  // Children = all nodes whose upstreamId === this node's id (covers both main chain + branches)
+  nodes.filter(n => n.upstreamId === node.id).forEach(child => queue.push(child));
+}
+
+for (const current of ordered) {
   const nodeBody = {
+    key: current.key,   // preserve key so jobsMapByNodeKey references in sibling configs stay valid
     type: current.type,
     title: current.title,
     config: current.config,
@@ -147,7 +161,6 @@ while (current) {
     console.error(`    ✗ Node ${current.type} failed: ` + e.message);
   }
   fs.unlinkSync(nBodyFile);
-  current = current.downstreamId ? byId[current.downstreamId] : null;
 }
 JSEOF
 
