@@ -1,0 +1,54 @@
+{
+  "data": {
+    "id": 374923636637696,
+    "createdAt": "2026-07-11T20:25:21.638Z",
+    "updatedAt": "2026-07-12T00:02:38.403Z",
+    "key": "zn9ruhtrn9t",
+    "title": "KPI-WF01: Thông báo đề xuất mới cho Quản trị",
+    "enabled": true,
+    "description": "Khi Cán bộ quản lý tạo đề xuất KPI, thông báo in-app cho Quản trị hệ thống",
+    "type": "collection",
+    "triggerTitle": "KPI-WF01: Thông báo đề xuất mới cho Quản trị",
+    "config": {
+      "mode": 1,
+      "appends": [
+        "proposed_by"
+      ],
+      "collection": "kpi_proposals"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374923691163648,
+        "createdAt": "2026-07-11T20:25:47.295Z",
+        "updatedAt": "2026-07-11T20:25:47.295Z",
+        "key": "53579fbcocn",
+        "title": "Thông báo Quản trị: Đề xuất KPI mới",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "sysadmin"
+            ]
+          },
+          "title": "Đề xuất KPI mới cần duyệt",
+          "content": "Có đề xuất KPI mới ({{$context.data.code}}) từ {{$context.data.proposed_by.nickname}} đang chờ duyệt."
+        },
+        "workflowId": 374923636637696
+      }
+    ]
+  }
+}

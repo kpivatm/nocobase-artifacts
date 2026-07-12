@@ -1,0 +1,85 @@
+{
+  "data": {
+    "id": 374925373079552,
+    "createdAt": "2026-07-11T20:39:09.127Z",
+    "updatedAt": "2026-07-12T01:01:29.879Z",
+    "key": "oaqir4uvyme",
+    "title": "KPI-WF05: Kiểm tra tổng trọng số BSC = 100%",
+    "enabled": false,
+    "description": "Sau mỗi thao tác thêm/sửa KPI catalog, kiểm tra tổng trọng số theo từng khía cạnh BSC. Ghi log nếu != 100%.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 3,
+      "appends": [],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": null,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374925450674176,
+        "createdAt": "2026-07-11T20:39:46.721Z",
+        "updatedAt": "2026-07-11T20:39:46.721Z",
+        "key": "kkileevka9p",
+        "title": "Cảnh báo tổng trọng số BSC",
+        "upstreamId": 374925423411200,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "sysadmin"
+            ]
+          },
+          "title": "Cảnh báo: Tổng trọng số BSC != 100%",
+          "content": "Sau thay đổi KPI {{$context.data.code}}, khía cạnh BSC {{$context.data.bsc_dimension}} có tổng trọng số = {{$jobsMapByNodeKey.yblu46bbtfe.result}}% (kiểm tra lại nếu != 100%)."
+        },
+        "workflowId": 374925373079552
+      },
+      {
+        "id": 374925423411200,
+        "createdAt": "2026-07-11T20:39:33.845Z",
+        "updatedAt": "2026-07-11T20:39:46.728Z",
+        "key": "yblu46bbtfe",
+        "title": "Tính tổng trọng số cùng BSC",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374925450674176,
+        "type": "query",
+        "config": {
+          "collection": "kpi_catalog",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "bsc_dimension": {
+                    "$eq": "{{$context.data.bsc_dimension}}"
+                  }
+                },
+                {
+                  "status": {
+                    "$eq": "active"
+                  }
+                }
+              ]
+            },
+            "aggregate": "sum",
+            "field": "weight_default"
+          }
+        },
+        "workflowId": 374925373079552
+      }
+    ]
+  }
+}

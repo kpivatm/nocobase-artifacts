@@ -1,0 +1,178 @@
+{
+  "data": [
+    {
+      "createdAt": "2026-07-09T08:21:35.021Z",
+      "updatedAt": "2026-07-09T08:21:36.966Z",
+      "name": "admin",
+      "title": "{{t(\"Admin\")}}",
+      "description": null,
+      "strategy": {
+        "actions": [
+          "create",
+          "view",
+          "update",
+          "destroy",
+          "export",
+          "importXlsx"
+        ]
+      },
+      "default": false,
+      "hidden": false,
+      "allowConfigure": true,
+      "allowNewMenu": true,
+      "snippets": [
+        "pm",
+        "pm.*",
+        "ui.*"
+      ],
+      "allowNewMobileMenu": true,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-11T20:21:31.495Z",
+      "updatedAt": "2026-07-11T20:21:31.495Z",
+      "name": "leader",
+      "title": "Lãnh đạo",
+      "description": "Chỉ xem + chi tiết. Không thấy nút sửa/tắt/đề xuất.",
+      "strategy": {
+        "actions": [
+          "view"
+        ]
+      },
+      "default": false,
+      "hidden": false,
+      "allowConfigure": null,
+      "allowNewMenu": false,
+      "snippets": [
+        "!pm",
+        "!pm.*",
+        "!ui.*"
+      ],
+      "allowNewMobileMenu": false,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-11T20:21:27.120Z",
+      "updatedAt": "2026-07-11T20:21:27.120Z",
+      "name": "manager",
+      "title": "Cán bộ quản lý",
+      "description": "Xem + đề xuất + xuất file Excel/PDF. Không thêm/sửa/tắt trực tiếp.",
+      "strategy": {
+        "actions": [
+          "view",
+          "export"
+        ]
+      },
+      "default": false,
+      "hidden": false,
+      "allowConfigure": null,
+      "allowNewMenu": false,
+      "snippets": [
+        "!pm",
+        "!pm.*",
+        "!ui.*"
+      ],
+      "allowNewMobileMenu": false,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-09T08:21:35.048Z",
+      "updatedAt": "2026-07-09T08:21:35.048Z",
+      "name": "member",
+      "title": "{{t(\"Member\")}}",
+      "description": null,
+      "strategy": {
+        "actions": [
+          "view:own"
+        ]
+      },
+      "default": true,
+      "hidden": false,
+      "allowConfigure": null,
+      "allowNewMenu": true,
+      "snippets": [
+        "!pm",
+        "!pm.*",
+        "!ui.*"
+      ],
+      "allowNewMobileMenu": true,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-09T08:21:34.987Z",
+      "updatedAt": "2026-07-09T08:21:34.987Z",
+      "name": "root",
+      "title": "{{t(\"Root\")}}",
+      "description": null,
+      "strategy": null,
+      "default": false,
+      "hidden": true,
+      "allowConfigure": null,
+      "allowNewMenu": false,
+      "snippets": [
+        "pm",
+        "pm.*",
+        "ui.*"
+      ],
+      "allowNewMobileMenu": false,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-11T20:21:35.828Z",
+      "updatedAt": "2026-07-11T20:21:35.828Z",
+      "name": "specialist",
+      "title": "Chuyên viên",
+      "description": "Chỉ thấy KPI đang hoạt động. Không thấy nút quản trị.",
+      "strategy": {
+        "actions": [
+          "view"
+        ]
+      },
+      "default": false,
+      "hidden": false,
+      "allowConfigure": null,
+      "allowNewMenu": false,
+      "snippets": [
+        "!pm",
+        "!pm.*",
+        "!ui.*"
+      ],
+      "allowNewMobileMenu": false,
+      "allowNewAiEmployee": true
+    },
+    {
+      "createdAt": "2026-07-11T20:21:15.791Z",
+      "updatedAt": "2026-07-11T20:21:15.791Z",
+      "name": "sysadmin",
+      "title": "Quản trị hệ thống",
+      "description": "Toàn quyền: thêm, sửa, tắt/bật, duyệt đề xuất, xuất file, import",
+      "strategy": {
+        "actions": [
+          "create",
+          "view",
+          "update",
+          "destroy",
+          "export",
+          "importXlsx"
+        ]
+      },
+      "default": false,
+      "hidden": false,
+      "allowConfigure": true,
+      "allowNewMenu": true,
+      "snippets": [
+        "!pm",
+        "!pm.*",
+        "!ui.*"
+      ],
+      "allowNewMobileMenu": false,
+      "allowNewAiEmployee": true
+    }
+  ],
+  "meta": {
+    "count": 7,
+    "page": 1,
+    "pageSize": 20,
+    "totalPage": 1
+  }
+}

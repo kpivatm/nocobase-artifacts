@@ -1,0 +1,164 @@
+{
+  "data": {
+    "id": 374958015250432,
+    "createdAt": "2026-07-12T00:58:34.546Z",
+    "updatedAt": "2026-07-12T03:20:00.425Z",
+    "key": "79ndyfdwhjg",
+    "title": "KPI-WF-AUDIT-STATUS: Ghi lịch sử khi Tắt KPI",
+    "enabled": false,
+    "description": "B1 fix: ghi bản ghi kpi_change_history khi Quản trị tắt KPI (status → inactive). Thực hiện AC-06 + AC-15 cho sự kiện Tắt.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "status"
+      ],
+      "condition": {
+        "$and": [
+          {
+            "status": {
+              "$eq": "Tạm tắt"
+            }
+          }
+        ]
+      },
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374958038319104,
+        "createdAt": "2026-07-12T00:58:45.165Z",
+        "updatedAt": "2026-07-12T01:29:17.434Z",
+        "key": "yaaa4imo8nx",
+        "title": "Ghi kpi_change_history: Tắt KPI",
+        "upstreamId": 374961855135744,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "values": {
+              "kpiId": "{{$context.data.id}}",
+              "version": "{{$jobsMapByNodeKey.dik37svbsca.result}}",
+              "changed_field": "status",
+              "old_value": "{{$jobsMapByNodeKey.3wlx4qnk7xm.data[0].new_value}}",
+              "new_value": "Tạm tắt",
+              "changed_by": "{{$context.data.updatedById}}",
+              "changed_at": "{{$context.data.updatedAt}}",
+              "reason": "{{$context.data.change_reason}}"
+            }
+          }
+        },
+        "workflowId": 374958015250432
+      },
+      {
+        "id": 374961785929728,
+        "createdAt": "2026-07-12T01:28:32.206Z",
+        "updatedAt": "2026-07-12T01:28:55.819Z",
+        "key": "hbfo1d5kg6q",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374961834164224,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "aggregate": "count",
+            "field": "id"
+          }
+        },
+        "workflowId": 374958015250432
+      },
+      {
+        "id": 374961855135744,
+        "createdAt": "2026-07-12T01:29:05.092Z",
+        "updatedAt": "2026-07-12T01:29:05.106Z",
+        "key": "dik37svbsca",
+        "title": "Tính version mới (count+1)",
+        "upstreamId": 374961834164224,
+        "branchIndex": null,
+        "downstreamId": 374958038319104,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "calculator": "add",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "hbfo1d5kg6q"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "workflowId": 374958015250432
+      },
+      {
+        "id": 374961834164224,
+        "createdAt": "2026-07-12T01:28:55.807Z",
+        "updatedAt": "2026-07-12T01:29:05.108Z",
+        "key": "3wlx4qnk7xm",
+        "title": "Old value: entry trước cho status",
+        "upstreamId": 374961785929728,
+        "branchIndex": null,
+        "downstreamId": 374961855135744,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "status"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374958015250432
+      }
+    ]
+  }
+}

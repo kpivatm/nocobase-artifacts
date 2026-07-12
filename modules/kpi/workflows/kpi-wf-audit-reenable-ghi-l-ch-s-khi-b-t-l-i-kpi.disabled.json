@@ -1,0 +1,159 @@
+{
+  "data": {
+    "id": 374963874693120,
+    "createdAt": "2026-07-12T01:45:08.686Z",
+    "updatedAt": "2026-07-12T03:20:00.575Z",
+    "key": "opkp9abdq9m",
+    "title": "KPI-WF-AUDIT-REENABLE: Ghi lịch sử khi Bật lại KPI",
+    "enabled": false,
+    "description": null,
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "changed": [
+        "status"
+      ],
+      "condition": {
+        "status": {
+          "$eq": "Đang hoạt động"
+        }
+      },
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374963893567488,
+        "createdAt": "2026-07-12T01:45:17.431Z",
+        "updatedAt": "2026-07-12T01:45:26.117Z",
+        "key": "zvb4lqb50b1",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374963912441856,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "aggregate": "count",
+            "field": "id"
+          }
+        },
+        "workflowId": 374963874693120
+      },
+      {
+        "id": 374963912441856,
+        "createdAt": "2026-07-12T01:45:26.113Z",
+        "updatedAt": "2026-07-12T01:45:34.250Z",
+        "key": "6m2rv5kpt83",
+        "title": "Query: old_value cho status",
+        "upstreamId": 374963893567488,
+        "branchIndex": null,
+        "downstreamId": 374963929219072,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "status"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374963874693120
+      },
+      {
+        "id": 374963948093440,
+        "createdAt": "2026-07-12T01:45:43.750Z",
+        "updatedAt": "2026-07-12T01:45:43.750Z",
+        "key": "vltfry2lgsf",
+        "title": "Ghi kpi_change_history: Bật lại KPI",
+        "upstreamId": 374963929219072,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "values": {
+              "kpiId": "{{$context.data.id}}",
+              "changed_field": "status",
+              "old_value": "{{$jobsMapByNodeKey.6m2rv5kpt83.data[0].new_value}}",
+              "new_value": "Đang hoạt động",
+              "changed_by": "{{$context.data.updatedById}}",
+              "changed_at": "{{$context.data.updatedAt}}",
+              "reason": "{{$context.data.change_reason}}",
+              "version": "{{$jobsMapByNodeKey.kepwgzc37r3.result}}"
+            }
+          }
+        },
+        "workflowId": 374963874693120
+      },
+      {
+        "id": 374963929219072,
+        "createdAt": "2026-07-12T01:45:34.244Z",
+        "updatedAt": "2026-07-12T01:45:43.756Z",
+        "key": "kepwgzc37r3",
+        "title": "Calc: version = count + 1",
+        "upstreamId": 374963912441856,
+        "branchIndex": null,
+        "downstreamId": 374963948093440,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "calculator": "add",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "zvb4lqb50b1"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "workflowId": 374963874693120
+      }
+    ]
+  }
+}

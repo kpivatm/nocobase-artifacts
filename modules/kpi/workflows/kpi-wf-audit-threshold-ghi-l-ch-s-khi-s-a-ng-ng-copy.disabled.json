@@ -1,0 +1,162 @@
+{
+  "data": {
+    "id": 374971351040000,
+    "createdAt": "2026-07-12T02:44:33.562Z",
+    "updatedAt": "2026-07-12T08:35:34.779Z",
+    "key": "x72uo6kn55l",
+    "title": "KPI-WF-AUDIT-THRESHOLD: Ghi lịch sử khi sửa Ngưỡng copy",
+    "enabled": false,
+    "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa ngưỡng xanh/vàng/đỏ. AC-06 + AC-15.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "threshold_green",
+        "threshold_yellow",
+        "threshold_red"
+      ],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374971351040002,
+        "createdAt": "2026-07-12T02:44:33.585Z",
+        "updatedAt": "2026-07-12T04:12:41.915Z",
+        "key": "jenx47lhho7",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374971351040004,
+        "type": "query",
+        "config": {
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "limit": 1
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971351040000
+      },
+      {
+        "id": 374971351040001,
+        "createdAt": "2026-07-12T02:44:33.582Z",
+        "updatedAt": "2026-07-12T04:08:14.588Z",
+        "key": "y61vw8t3xcx",
+        "title": "Ghi kpi_change_history: Ngưỡng",
+        "upstreamId": 374971351040003,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "params": {
+            "values": {
+              "changed_field": "Ngưỡng (green/yellow/red)",
+              "changed_by": "{{$context.data.updatedById}}",
+              "old_value": "{{$jobsMapByNodeKey.cx0md6nhj2m.new_value}}",
+              "changed_at": "{{$context.data.updatedAt}}",
+              "reason": "{{$context.data.change_reason}}",
+              "version": "{{$jobsMapByNodeKey.tulqtisis0f.result}}",
+              "kpi": "{{$context.data.id}}",
+              "new_value": "xanh={{$context.data.threshold_green}} vàng={{$context.data.threshold_yellow}} đỏ={{$context.data.threshold_red}}"
+            }
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971351040000
+      },
+      {
+        "id": 374971351040003,
+        "createdAt": "2026-07-12T02:44:33.587Z",
+        "updatedAt": "2026-07-12T04:08:14.185Z",
+        "key": "tulqtisis0f",
+        "title": "Calc: version = count + 1",
+        "upstreamId": 374971351040004,
+        "branchIndex": null,
+        "downstreamId": 374971351040001,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "calculator": "add",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "jenx47lhho7"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "workflowId": 374971351040000
+      },
+      {
+        "id": 374971351040004,
+        "createdAt": "2026-07-12T02:44:33.589Z",
+        "updatedAt": "2026-07-12T02:44:33.598Z",
+        "key": "cx0md6nhj2m",
+        "title": "Query: old_value cho Ngưỡng",
+        "upstreamId": 374971351040002,
+        "branchIndex": null,
+        "downstreamId": 374971351040003,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "Ngưỡng (green/yellow/red)"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374971351040000
+      }
+    ]
+  }
+}

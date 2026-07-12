@@ -1,0 +1,607 @@
+{
+  "data": [
+    {
+      "id": 374923636637696,
+      "createdAt": "2026-07-11T20:25:21.638Z",
+      "updatedAt": "2026-07-12T00:02:38.403Z",
+      "key": "zn9ruhtrn9t",
+      "title": "KPI-WF01: Thông báo đề xuất mới cho Quản trị",
+      "enabled": true,
+      "description": "Khi Cán bộ quản lý tạo đề xuất KPI, thông báo in-app cho Quản trị hệ thống",
+      "type": "collection",
+      "triggerTitle": "KPI-WF01: Thông báo đề xuất mới cho Quản trị",
+      "config": {
+        "mode": 1,
+        "appends": [
+          "proposed_by"
+        ],
+        "collection": "kpi_proposals"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374923718426624,
+      "createdAt": "2026-07-11T20:26:00.403Z",
+      "updatedAt": "2026-07-12T00:02:47.453Z",
+      "key": "likzd54v6g9",
+      "title": "KPI-WF02: Thông báo từ chối đề xuất cho CB Quản lý",
+      "enabled": true,
+      "description": "Khi Quản trị từ chối đề xuất KPI, thông báo in-app kèm lý do cho Cán bộ quản lý đã gửi",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [
+          "proposed_by"
+        ],
+        "changed": [
+          "status"
+        ],
+        "condition": {
+          "$and": [
+            {
+              "status": {
+                "$eq": "rejected"
+              }
+            }
+          ]
+        },
+        "collection": "kpi_proposals"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374923861032960,
+      "createdAt": "2026-07-11T20:27:08.570Z",
+      "updatedAt": "2026-07-12T00:05:34.888Z",
+      "key": "ng8c6rb702e",
+      "title": "KPI-WF01b: Thông báo CB Quản lý khi thêm KPI",
+      "enabled": false,
+      "description": null,
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 1,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": null,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374923879907328,
+      "createdAt": "2026-07-11T20:27:17.200Z",
+      "updatedAt": "2026-07-12T00:58:02.907Z",
+      "key": "w1jhbjrj47c",
+      "title": "KPI-WF02b: Thông báo CB Quản lý khi sửa KPI",
+      "enabled": true,
+      "description": "Khi Quản trị sửa thông tin KPI (không bao gồm thay đổi status — xem WF-DISABLE-STATUS), thông báo in-app cho tất cả Cán bộ quản lý.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "name",
+          "definition",
+          "unit",
+          "frequency",
+          "bsc_dimension",
+          "kpi_type",
+          "direction",
+          "data_source",
+          "weight_default",
+          "threshold_green",
+          "threshold_yellow",
+          "threshold_red",
+          "count_in_score",
+          "notes"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374923898781696,
+      "createdAt": "2026-07-11T20:27:26.058Z",
+      "updatedAt": "2026-07-12T00:57:51.468Z",
+      "key": "q65nks682ne",
+      "title": "KPI-WF04b: Thông báo CB Quản lý khi tắt/xóa KPI",
+      "enabled": false,
+      "description": "DISABLED: WF04b triggers on kpi_catalog DELETE (mode 4), but BR-02 prohibits deletes — only status update to inactive is allowed. Disable notification is now handled by WF-DISABLE-STATUS workflow. See A3 from arch-review.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 4,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374925373079552,
+      "createdAt": "2026-07-11T20:39:09.127Z",
+      "updatedAt": "2026-07-12T01:01:29.879Z",
+      "key": "oaqir4uvyme",
+      "title": "KPI-WF05: Kiểm tra tổng trọng số BSC = 100%",
+      "enabled": false,
+      "description": "Sau mỗi thao tác thêm/sửa KPI catalog, kiểm tra tổng trọng số theo từng khía cạnh BSC. Ghi log nếu != 100%.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 3,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": null,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374951172243456,
+      "createdAt": "2026-07-12T00:04:11.581Z",
+      "updatedAt": "2026-07-12T00:05:34.878Z",
+      "key": "ng8c6rb702e",
+      "title": "KPI-WF01b: Thông báo CB Quản lý khi thêm KPI",
+      "enabled": true,
+      "description": null,
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 1,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374957973307392,
+      "createdAt": "2026-07-12T00:58:14.065Z",
+      "updatedAt": "2026-07-12T01:00:27.196Z",
+      "key": "q3ziqxoeg4x",
+      "title": "KPI-WF-DISABLE-STATUS: Thông báo CB Quản lý khi Tắt KPI",
+      "enabled": true,
+      "description": "Khi Quản trị tắt KPI (status → inactive/Tạm tắt), thông báo in-app đúng ngữ nghĩa cho CB Quản lý. Fix A3 arch-review: WF04b (mode 4 DELETE) không bao giờ chạy vì BR-02 cấm xóa.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "status"
+        ],
+        "condition": {
+          "$and": [
+            {
+              "status": {
+                "$eq": "Tạm tắt"
+              }
+            }
+          ]
+        },
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374958015250432,
+      "createdAt": "2026-07-12T00:58:34.546Z",
+      "updatedAt": "2026-07-12T03:20:00.425Z",
+      "key": "79ndyfdwhjg",
+      "title": "KPI-WF-AUDIT-STATUS: Ghi lịch sử khi Tắt KPI",
+      "enabled": false,
+      "description": "B1 fix: ghi bản ghi kpi_change_history khi Quản trị tắt KPI (status → inactive). Thực hiện AC-06 + AC-15 cho sự kiện Tắt.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "status"
+        ],
+        "condition": {
+          "$and": [
+            {
+              "status": {
+                "$eq": "Tạm tắt"
+              }
+            }
+          ]
+        },
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374958057193472,
+      "createdAt": "2026-07-12T00:58:54.606Z",
+      "updatedAt": "2026-07-12T03:20:00.462Z",
+      "key": "6fcfbm19kl9",
+      "title": "KPI-WF-AUDIT-FORMULA: Ghi lịch sử khi sửa Công thức",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa định nghĩa/công thức KPI. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "definition"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374958094942208,
+      "createdAt": "2026-07-12T00:59:12.918Z",
+      "updatedAt": "2026-07-12T03:20:00.502Z",
+      "key": "19ru55tqqmr",
+      "title": "KPI-WF-AUDIT-WEIGHT: Ghi lịch sử khi sửa Trọng số",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa trọng số BSC. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "weight_default"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374958141079552,
+      "createdAt": "2026-07-12T00:59:34.687Z",
+      "updatedAt": "2026-07-12T03:20:00.540Z",
+      "key": "ti14kie5tdv",
+      "title": "KPI-WF-AUDIT-THRESHOLD: Ghi lịch sử khi sửa Ngưỡng",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa ngưỡng xanh/vàng/đỏ. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "threshold_green",
+          "threshold_yellow",
+          "threshold_red"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374958382252032,
+      "createdAt": "2026-07-12T01:01:29.875Z",
+      "updatedAt": "2026-07-12T01:02:43.923Z",
+      "key": "oaqir4uvyme",
+      "title": "KPI-WF05: Kiểm tra tổng trọng số BSC = 100%",
+      "enabled": true,
+      "description": "Sau mỗi thao tác thêm/sửa KPI catalog, kiểm tra tổng trọng số theo từng khía cạnh BSC. Ghi log nếu != 100%.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 3,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374961699946496,
+      "createdAt": "2026-07-12T01:27:51.784Z",
+      "updatedAt": "2026-07-12T03:20:00.374Z",
+      "key": "cg5251equ18",
+      "title": "KPI-WF-AUDIT-CREATE: Ghi lịch sử Tạo KPI (baseline v1)",
+      "enabled": false,
+      "description": "Ghi bản ghi kpi_change_history v1 baseline khi KPI được tạo mới. Đóng gap TC-006/TC-024. Cho phép old_value chính xác ở lần sửa đầu tiên.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 1,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374963874693120,
+      "createdAt": "2026-07-12T01:45:08.686Z",
+      "updatedAt": "2026-07-12T03:20:00.575Z",
+      "key": "opkp9abdq9m",
+      "title": "KPI-WF-AUDIT-REENABLE: Ghi lịch sử khi Bật lại KPI",
+      "enabled": false,
+      "description": null,
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "changed": [
+          "status"
+        ],
+        "condition": {
+          "status": {
+            "$eq": "Đang hoạt động"
+          }
+        },
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": 1,
+      "updatedById": 1
+    },
+    {
+      "id": 374971302805504,
+      "createdAt": "2026-07-12T02:44:10.970Z",
+      "updatedAt": "2026-07-12T08:35:17.011Z",
+      "key": "pemhyb9qqqv",
+      "title": "KPI-WF-AUDIT-CREATE: Ghi lịch sử Tạo KPI (baseline v1) copy",
+      "enabled": false,
+      "description": "Ghi bản ghi kpi_change_history v1 baseline khi KPI được tạo mới. Đóng gap TC-006/TC-024. Cho phép old_value chính xác ở lần sửa đầu tiên.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 1,
+        "appends": [],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374971321679872,
+      "createdAt": "2026-07-12T02:44:19.864Z",
+      "updatedAt": "2026-07-12T08:35:21.494Z",
+      "key": "tjp1bzwjdxs",
+      "title": "KPI-WF-AUDIT-STATUS: Ghi lịch sử khi Tắt KPI copy",
+      "enabled": false,
+      "description": "B1 fix: ghi bản ghi kpi_change_history khi Quản trị tắt KPI (status → inactive). Thực hiện AC-06 + AC-15 cho sự kiện Tắt.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "status"
+        ],
+        "condition": {
+          "$and": [
+            {
+              "status": {
+                "$eq": "Tạm tắt"
+              }
+            }
+          ]
+        },
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374971332165632,
+      "createdAt": "2026-07-12T02:44:24.544Z",
+      "updatedAt": "2026-07-12T08:35:25.757Z",
+      "key": "rjn62gee6qh",
+      "title": "KPI-WF-AUDIT-FORMULA: Ghi lịch sử khi sửa Công thức copy",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa định nghĩa/công thức KPI. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "definition"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374971342651392,
+      "createdAt": "2026-07-12T02:44:29.051Z",
+      "updatedAt": "2026-07-12T08:35:30.172Z",
+      "key": "bo9mzdr8z7c",
+      "title": "KPI-WF-AUDIT-WEIGHT: Ghi lịch sử khi sửa Trọng số copy",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa trọng số BSC. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "weight_default"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    },
+    {
+      "id": 374971351040000,
+      "createdAt": "2026-07-12T02:44:33.562Z",
+      "updatedAt": "2026-07-12T08:35:34.779Z",
+      "key": "x72uo6kn55l",
+      "title": "KPI-WF-AUDIT-THRESHOLD: Ghi lịch sử khi sửa Ngưỡng copy",
+      "enabled": false,
+      "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa ngưỡng xanh/vàng/đỏ. AC-06 + AC-15.",
+      "type": "collection",
+      "triggerTitle": null,
+      "config": {
+        "mode": 2,
+        "appends": [],
+        "changed": [
+          "threshold_green",
+          "threshold_yellow",
+          "threshold_red"
+        ],
+        "collection": "kpi_catalog"
+      },
+      "executed": 0,
+      "allExecuted": 0,
+      "current": true,
+      "sync": false,
+      "options": {
+        "timeout": 0
+      },
+      "createdById": null,
+      "updatedById": 1
+    }
+  ],
+  "meta": {
+    "count": 21,
+    "page": 1,
+    "pageSize": 20,
+    "totalPage": 2
+  }
+}

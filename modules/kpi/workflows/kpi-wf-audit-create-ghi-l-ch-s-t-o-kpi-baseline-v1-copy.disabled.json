@@ -1,0 +1,56 @@
+{
+  "data": {
+    "id": 374971302805504,
+    "createdAt": "2026-07-12T02:44:10.970Z",
+    "updatedAt": "2026-07-12T08:35:17.011Z",
+    "key": "pemhyb9qqqv",
+    "title": "KPI-WF-AUDIT-CREATE: Ghi lịch sử Tạo KPI (baseline v1) copy",
+    "enabled": false,
+    "description": "Ghi bản ghi kpi_change_history v1 baseline khi KPI được tạo mới. Đóng gap TC-006/TC-024. Cho phép old_value chính xác ở lần sửa đầu tiên.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 1,
+      "appends": [],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374971302805505,
+        "createdAt": "2026-07-12T02:44:10.990Z",
+        "updatedAt": "2026-07-12T02:46:24.024Z",
+        "key": "0g3oqydpouj",
+        "title": "Ghi kpi_change_history: Tạo mới (v1 baseline)",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "values": {
+              "kpi": "{{$context.data.id}}",
+              "version": 1,
+              "changed_field": "Tạo mới",
+              "old_value": "",
+              "new_value": "{{$context.data.name}}",
+              "changed_by": "{{$context.data.createdById}}",
+              "changed_at": "{{$context.data.createdAt}}",
+              "reason": ""
+            }
+          }
+        },
+        "workflowId": 374971302805504
+      }
+    ]
+  }
+}

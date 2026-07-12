@@ -1,0 +1,52 @@
+{
+  "data": {
+    "id": 374923898781696,
+    "createdAt": "2026-07-11T20:27:26.058Z",
+    "updatedAt": "2026-07-12T00:57:51.468Z",
+    "key": "q65nks682ne",
+    "title": "KPI-WF04b: Thông báo CB Quản lý khi tắt/xóa KPI",
+    "enabled": false,
+    "description": "DISABLED: WF04b triggers on kpi_catalog DELETE (mode 4), but BR-02 prohibits deletes — only status update to inactive is allowed. Disable notification is now handled by WF-DISABLE-STATUS workflow. See A3 from arch-review.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 4,
+      "appends": [],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374923907170304,
+        "createdAt": "2026-07-11T20:27:30.336Z",
+        "updatedAt": "2026-07-12T00:05:14.272Z",
+        "key": "w2s40izq0n0",
+        "title": "Thông báo: tắt/xóa KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "manager"
+            ]
+          },
+          "title": "Quản trị vừa tắt/xóa KPI",
+          "content": "KPI {{$context.data.code}} - {{$context.data.name}} vừa được tắt/xóa bởi Quản trị hệ thống."
+        },
+        "workflowId": 374923898781696
+      }
+    ]
+  }
+}

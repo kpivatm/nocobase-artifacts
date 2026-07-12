@@ -1,0 +1,887 @@
+{
+  "data": {
+    "key": "qy23pgetygu",
+    "name": "kpi_catalog",
+    "title": "Danh mục KPI",
+    "inherit": false,
+    "hidden": false,
+    "description": "Bảng danh mục KPI KHCN chính",
+    "fields": [
+      {
+        "key": "0mky16kyfa4",
+        "name": "id",
+        "type": "snowflakeId",
+        "interface": "snowflakeId",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "ID",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "separator": "0.00",
+            "step": "1"
+          },
+          "x-validator": "integer"
+        },
+        "primaryKey": true,
+        "allowNull": false,
+        "autoIncrement": false
+      },
+      {
+        "key": "mz4dpa2qkvi",
+        "name": "createdAt",
+        "type": "date",
+        "interface": "createdAt",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "datetime",
+          "title": "Created at",
+          "x-component": "DatePicker",
+          "x-read-pretty": true,
+          "x-hidden": true
+        },
+        "field": "createdAt"
+      },
+      {
+        "key": "zotdgehuak9",
+        "name": "createdBy",
+        "type": "belongsTo",
+        "interface": "createdBy",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "object",
+          "title": "Created by",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "fieldNames": {
+              "value": "id",
+              "label": "nickname"
+            }
+          },
+          "x-read-pretty": true
+        },
+        "target": "users",
+        "foreignKey": "createdById",
+        "targetKey": "id"
+      },
+      {
+        "key": "fk1jc4r7q2i",
+        "name": "updatedAt",
+        "type": "date",
+        "interface": "updatedAt",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "datetime",
+          "title": "Last updated at",
+          "x-component": "DatePicker",
+          "x-read-pretty": true,
+          "x-hidden": true
+        },
+        "field": "updatedAt"
+      },
+      {
+        "key": "jrp02uiz2e8",
+        "name": "updatedBy",
+        "type": "belongsTo",
+        "interface": "updatedBy",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "object",
+          "title": "Last updated by",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "fieldNames": {
+              "value": "id",
+              "label": "nickname"
+            }
+          },
+          "x-read-pretty": true
+        },
+        "target": "users",
+        "foreignKey": "updatedById",
+        "targetKey": "id"
+      },
+      {
+        "key": "hkiu4du5p1x",
+        "name": "code",
+        "type": "sequence",
+        "interface": "sequence",
+        "description": "Tự động sinh: KPI-NNN",
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "string",
+          "title": "Mã KPI",
+          "x-component": "Sequence"
+        },
+        "patterns": [
+          {
+            "type": "string",
+            "options": {
+              "value": "KPI-"
+            }
+          },
+          {
+            "type": "integer",
+            "options": {
+              "key": 1,
+              "digits": 3,
+              "start": 1,
+              "step": 1,
+              "cycle": null
+            }
+          }
+        ],
+        "inputable": false
+      },
+      {
+        "key": "ydbk6aws74n",
+        "name": "name",
+        "type": "string",
+        "interface": "input",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "validation": {
+          "type": "string",
+          "rules": [
+            {
+              "name": "required",
+              "key": "r_ipgp7s5nlyp"
+            },
+            {
+              "name": "max",
+              "args": {
+                "limit": 200
+              },
+              "key": "r_0umnhu7qhxq"
+            }
+          ]
+        },
+        "uiSchema": {
+          "type": "string",
+          "title": "Tên KPI",
+          "x-component": "Input"
+        }
+      },
+      {
+        "key": "w7oy5obv20q",
+        "name": "group",
+        "type": "belongsTo",
+        "interface": "m2o",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "target": "kpi_groups",
+        "validation": {
+          "type": "number",
+          "rules": [
+            {
+              "name": "required",
+              "key": "r_e1dmnfr0x7j"
+            }
+          ]
+        },
+        "targetKey": "id",
+        "foreignKey": "groupId",
+        "uiSchema": {
+          "type": "object",
+          "title": "Nhóm KPI",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "multiple": false,
+            "fieldNames": {
+              "value": "id",
+              "label": "id"
+            }
+          }
+        }
+      },
+      {
+        "key": "g60afxf93g5",
+        "name": "definition",
+        "type": "text",
+        "interface": "textarea",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "validation": {
+          "type": "string",
+          "rules": [
+            {
+              "name": "required",
+              "key": "r_8wjb432vnsk"
+            },
+            {
+              "name": "max",
+              "args": {
+                "limit": 1000
+              },
+              "key": "r_y6u3dtbx38s"
+            }
+          ]
+        },
+        "uiSchema": {
+          "type": "string",
+          "title": "Định nghĩa",
+          "x-component": "Input.TextArea"
+        }
+      },
+      {
+        "key": "wtryad9h0co",
+        "name": "unit",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "percent",
+            "label": "%",
+            "color": "blue"
+          },
+          {
+            "value": "detai",
+            "label": "Đề tài",
+            "color": "green"
+          },
+          {
+            "value": "ngay",
+            "label": "Ngày",
+            "color": "cyan"
+          },
+          {
+            "value": "nguoi",
+            "label": "Người",
+            "color": "purple"
+          },
+          {
+            "value": "gio",
+            "label": "Giờ",
+            "color": "orange"
+          },
+          {
+            "value": "thang",
+            "label": "Tháng",
+            "color": "gold"
+          },
+          {
+            "value": "diem5",
+            "label": "Điểm/5",
+            "color": "lime"
+          },
+          {
+            "value": "sangkien",
+            "label": "Sáng kiến",
+            "color": "magenta"
+          },
+          {
+            "value": "ipr",
+            "label": "IPR",
+            "color": "red"
+          },
+          {
+            "value": "hopdong",
+            "label": "Hợp đồng",
+            "color": "geekblue"
+          },
+          {
+            "value": "congnghe",
+            "label": "Công nghệ",
+            "color": "volcano"
+          },
+          {
+            "value": "luot",
+            "label": "Lượt",
+            "color": "cyan"
+          },
+          {
+            "value": "giaiphap",
+            "label": "Giải pháp",
+            "color": "green"
+          },
+          {
+            "value": "thietbi",
+            "label": "Thiết bị",
+            "color": "blue"
+          },
+          {
+            "value": "duan",
+            "label": "Dự án",
+            "color": "purple"
+          },
+          {
+            "value": "ytuong",
+            "label": "Ý tưởng",
+            "color": "lime"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Đơn vị đo",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "percent",
+              "label": "%",
+              "color": "blue"
+            },
+            {
+              "value": "detai",
+              "label": "Đề tài",
+              "color": "green"
+            },
+            {
+              "value": "ngay",
+              "label": "Ngày",
+              "color": "cyan"
+            },
+            {
+              "value": "nguoi",
+              "label": "Người",
+              "color": "purple"
+            },
+            {
+              "value": "gio",
+              "label": "Giờ",
+              "color": "orange"
+            },
+            {
+              "value": "thang",
+              "label": "Tháng",
+              "color": "gold"
+            },
+            {
+              "value": "diem5",
+              "label": "Điểm/5",
+              "color": "lime"
+            },
+            {
+              "value": "sangkien",
+              "label": "Sáng kiến",
+              "color": "magenta"
+            },
+            {
+              "value": "ipr",
+              "label": "IPR",
+              "color": "red"
+            },
+            {
+              "value": "hopdong",
+              "label": "Hợp đồng",
+              "color": "geekblue"
+            },
+            {
+              "value": "congnghe",
+              "label": "Công nghệ",
+              "color": "volcano"
+            },
+            {
+              "value": "luot",
+              "label": "Lượt",
+              "color": "cyan"
+            },
+            {
+              "value": "giaiphap",
+              "label": "Giải pháp",
+              "color": "green"
+            },
+            {
+              "value": "thietbi",
+              "label": "Thiết bị",
+              "color": "blue"
+            },
+            {
+              "value": "duan",
+              "label": "Dự án",
+              "color": "purple"
+            },
+            {
+              "value": "ytuong",
+              "label": "Ý tưởng",
+              "color": "lime"
+            }
+          ]
+        }
+      },
+      {
+        "key": "5fnkv1013o2",
+        "name": "frequency",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "monthly",
+            "label": "Tháng",
+            "color": "blue"
+          },
+          {
+            "value": "quarterly",
+            "label": "Quý",
+            "color": "green"
+          },
+          {
+            "value": "yearly",
+            "label": "Năm",
+            "color": "orange"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Tần suất",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "monthly",
+              "label": "Tháng",
+              "color": "blue"
+            },
+            {
+              "value": "quarterly",
+              "label": "Quý",
+              "color": "green"
+            },
+            {
+              "value": "yearly",
+              "label": "Năm",
+              "color": "orange"
+            }
+          ]
+        }
+      },
+      {
+        "key": "gbfmdcgea8l",
+        "name": "bsc_dimension",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "finance",
+            "label": "Tài chính",
+            "color": "gold"
+          },
+          {
+            "value": "customer",
+            "label": "Khách hàng",
+            "color": "blue"
+          },
+          {
+            "value": "internal",
+            "label": "Quy trình nội bộ",
+            "color": "green"
+          },
+          {
+            "value": "learning",
+            "label": "Học tập & PT",
+            "color": "purple"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Khía cạnh BSC",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "finance",
+              "label": "Tài chính",
+              "color": "gold"
+            },
+            {
+              "value": "customer",
+              "label": "Khách hàng",
+              "color": "blue"
+            },
+            {
+              "value": "internal",
+              "label": "Quy trình nội bộ",
+              "color": "green"
+            },
+            {
+              "value": "learning",
+              "label": "Học tập & PT",
+              "color": "purple"
+            }
+          ]
+        }
+      },
+      {
+        "key": "5ocyayykjf6",
+        "name": "kpi_type",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "leading",
+            "label": "Leading",
+            "color": "blue"
+          },
+          {
+            "value": "lagging",
+            "label": "Lagging",
+            "color": "orange"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Loại KPI",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "leading",
+              "label": "Leading",
+              "color": "blue"
+            },
+            {
+              "value": "lagging",
+              "label": "Lagging",
+              "color": "orange"
+            }
+          ]
+        }
+      },
+      {
+        "key": "7i83uv9obay",
+        "name": "direction",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "higher_better",
+            "label": "Cao hơn là tốt",
+            "color": "green"
+          },
+          {
+            "value": "lower_better",
+            "label": "Thấp hơn là tốt",
+            "color": "red"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Hướng tốt",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "higher_better",
+              "label": "Cao hơn là tốt",
+              "color": "green"
+            },
+            {
+              "value": "lower_better",
+              "label": "Thấp hơn là tốt",
+              "color": "red"
+            }
+          ]
+        }
+      },
+      {
+        "key": "mvl6ahvvntn",
+        "name": "data_source",
+        "type": "array",
+        "interface": "multipleSelect",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "ph2",
+            "label": "PH2",
+            "color": "blue"
+          },
+          {
+            "value": "ph3",
+            "label": "PH3",
+            "color": "green"
+          },
+          {
+            "value": "ph6",
+            "label": "PH6",
+            "color": "orange"
+          },
+          {
+            "value": "manual",
+            "label": "Nhập tay",
+            "color": "default"
+          }
+        ],
+        "uiSchema": {
+          "type": "array",
+          "title": "Nguồn dữ liệu",
+          "x-component": "Select",
+          "x-component-props": {
+            "mode": "multiple"
+          },
+          "enum": [
+            {
+              "value": "ph2",
+              "label": "PH2",
+              "color": "blue"
+            },
+            {
+              "value": "ph3",
+              "label": "PH3",
+              "color": "green"
+            },
+            {
+              "value": "ph6",
+              "label": "PH6",
+              "color": "orange"
+            },
+            {
+              "value": "manual",
+              "label": "Nhập tay",
+              "color": "default"
+            }
+          ]
+        },
+        "defaultValue": []
+      },
+      {
+        "key": "bbxawlw51eh",
+        "name": "weight_default",
+        "type": "float",
+        "interface": "percent",
+        "description": "Tổng theo BSC phải = 100% (cảnh báo, không chặn)",
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "string",
+          "title": "Trọng số mặc định (%)",
+          "x-component": "Percent",
+          "x-component-props": {
+            "stringMode": true,
+            "step": "1",
+            "addonAfter": "%"
+          }
+        }
+      },
+      {
+        "key": "1jc0spx7wag",
+        "name": "threshold_green",
+        "type": "double",
+        "interface": "number",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "Ngưỡng xanh",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "step": "1"
+          }
+        }
+      },
+      {
+        "key": "x48irb7o3zt",
+        "name": "threshold_yellow",
+        "type": "double",
+        "interface": "number",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "Ngưỡng vàng",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "step": "1"
+          }
+        }
+      },
+      {
+        "key": "0cdg7a5utu4",
+        "name": "threshold_red",
+        "type": "double",
+        "interface": "number",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "Ngưỡng đỏ",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "step": "1"
+          }
+        }
+      },
+      {
+        "key": "45pfvetqyqy",
+        "name": "count_in_score",
+        "type": "boolean",
+        "interface": "checkbox",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "boolean",
+          "title": "Tính vào điểm",
+          "x-component": "Checkbox"
+        },
+        "defaultValue": true
+      },
+      {
+        "key": "6ckfrp5v5uz",
+        "name": "status",
+        "type": "string",
+        "interface": "select",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "enum": [
+          {
+            "value": "active",
+            "label": "Đang hoạt động",
+            "color": "green"
+          },
+          {
+            "value": "inactive",
+            "label": "Tạm tắt",
+            "color": "red"
+          }
+        ],
+        "uiSchema": {
+          "type": "string",
+          "title": "Trạng thái",
+          "x-component": "Select",
+          "enum": [
+            {
+              "value": "active",
+              "label": "Đang hoạt động",
+              "color": "green"
+            },
+            {
+              "value": "inactive",
+              "label": "Tạm tắt",
+              "color": "red"
+            }
+          ]
+        }
+      },
+      {
+        "key": "cy2gw3lzxcz",
+        "name": "notes",
+        "type": "text",
+        "interface": "textarea",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "validation": {
+          "type": "string",
+          "rules": [
+            {
+              "name": "max",
+              "args": {
+                "limit": 500
+              },
+              "key": "r_qpai35d8xt9"
+            }
+          ]
+        },
+        "uiSchema": {
+          "type": "string",
+          "title": "Ghi chú",
+          "x-component": "Input.TextArea"
+        }
+      },
+      {
+        "key": "nw6wlf824yy",
+        "name": "change_history",
+        "type": "hasMany",
+        "interface": "o2m",
+        "description": null,
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": "8nonyfllc25",
+        "target": "kpi_change_history",
+        "targetKey": "id",
+        "foreignKey": "kpiId",
+        "otherKey": "kpiId",
+        "sourceKey": "id",
+        "uiSchema": {
+          "type": "array",
+          "title": "Lịch sử thay đổi",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "multiple": true,
+            "fieldNames": {
+              "value": "id",
+              "label": "id"
+            }
+          }
+        }
+      },
+      {
+        "key": "o06q68eu3g6",
+        "name": "change_reason",
+        "type": "text",
+        "interface": "textarea",
+        "description": "Bắt buộc nhập khi sửa Công thức, Trọng số, Ngưỡng, Tắt KPI (BR-06). Được đọc bởi WF-AUDIT-* để ghi vào kpi_change_history.reason.",
+        "collectionName": "kpi_catalog",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "string",
+          "title": "Lý do thay đổi",
+          "x-component": "Input.TextArea"
+        }
+      }
+    ],
+    "template": "general",
+    "logging": true,
+    "autoGenId": false,
+    "titleField": "id",
+    "filterTargetKey": "id",
+    "unavailableActions": []
+  }
+}

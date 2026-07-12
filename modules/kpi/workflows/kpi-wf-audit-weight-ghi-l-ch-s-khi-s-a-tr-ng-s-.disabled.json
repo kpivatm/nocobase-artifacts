@@ -1,0 +1,155 @@
+{
+  "data": {
+    "id": 374958094942208,
+    "createdAt": "2026-07-12T00:59:12.918Z",
+    "updatedAt": "2026-07-12T03:20:00.502Z",
+    "key": "19ru55tqqmr",
+    "title": "KPI-WF-AUDIT-WEIGHT: Ghi lịch sử khi sửa Trọng số",
+    "enabled": false,
+    "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa trọng số BSC. AC-06 + AC-15.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "weight_default"
+      ],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374958120108032,
+        "createdAt": "2026-07-12T00:59:24.961Z",
+        "updatedAt": "2026-07-12T01:34:48.768Z",
+        "key": "gent27z4m6d",
+        "title": "Ghi kpi_change_history: Trọng số",
+        "upstreamId": 374962337480704,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "values": {
+              "kpiId": "{{$context.data.id}}",
+              "changed_field": "Trọng số BSC (weight_default)",
+              "old_value": "{{$jobsMapByNodeKey.uh63zrbxbkm.data[0].new_value}}",
+              "new_value": "{{$context.data.weight_default}}",
+              "changed_by": "{{$context.data.updatedById}}",
+              "changed_at": "{{$context.data.updatedAt}}",
+              "reason": "{{$context.data.change_reason}}",
+              "version": "{{$jobsMapByNodeKey.b2t23h0js3m.result}}"
+            }
+          }
+        },
+        "workflowId": 374958094942208
+      },
+      {
+        "id": 374961980964864,
+        "createdAt": "2026-07-12T01:30:05.214Z",
+        "updatedAt": "2026-07-12T01:32:47.106Z",
+        "key": "a9f3gggk55i",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374962320703488,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "aggregate": "count",
+            "field": "id"
+          }
+        },
+        "workflowId": 374958094942208
+      },
+      {
+        "id": 374962337480704,
+        "createdAt": "2026-07-12T01:32:55.489Z",
+        "updatedAt": "2026-07-12T01:32:55.499Z",
+        "key": "b2t23h0js3m",
+        "title": "Calc: version = count + 1",
+        "upstreamId": 374962320703488,
+        "branchIndex": null,
+        "downstreamId": 374958120108032,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "calculator": "add",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "a9f3gggk55i"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "workflowId": 374958094942208
+      },
+      {
+        "id": 374962320703488,
+        "createdAt": "2026-07-12T01:32:47.092Z",
+        "updatedAt": "2026-07-12T01:32:55.501Z",
+        "key": "uh63zrbxbkm",
+        "title": "Query: old_value cho Trọng số",
+        "upstreamId": 374961980964864,
+        "branchIndex": null,
+        "downstreamId": 374962337480704,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "Trọng số BSC (weight_default)"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374958094942208
+      }
+    ]
+  }
+}

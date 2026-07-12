@@ -1,0 +1,64 @@
+{
+  "data": {
+    "id": 374957973307392,
+    "createdAt": "2026-07-12T00:58:14.065Z",
+    "updatedAt": "2026-07-12T01:00:27.196Z",
+    "key": "q3ziqxoeg4x",
+    "title": "KPI-WF-DISABLE-STATUS: Thông báo CB Quản lý khi Tắt KPI",
+    "enabled": true,
+    "description": "Khi Quản trị tắt KPI (status → inactive/Tạm tắt), thông báo in-app đúng ngữ nghĩa cho CB Quản lý. Fix A3 arch-review: WF04b (mode 4 DELETE) không bao giờ chạy vì BR-02 cấm xóa.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "status"
+      ],
+      "condition": {
+        "$and": [
+          {
+            "status": {
+              "$eq": "Tạm tắt"
+            }
+          }
+        ]
+      },
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374957992181760,
+        "createdAt": "2026-07-12T00:58:23.808Z",
+        "updatedAt": "2026-07-12T00:58:23.808Z",
+        "key": "b1au7h3dvwb",
+        "title": "Thông báo: Tắt KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "manager"
+            ]
+          },
+          "title": "Quản trị vừa tắt KPI",
+          "content": "KPI {{$context.data.code}} - {{$context.data.name}} vừa được TẮT (Tạm tắt) bởi Quản trị hệ thống."
+        },
+        "workflowId": 374957973307392
+      }
+    ]
+  }
+}
