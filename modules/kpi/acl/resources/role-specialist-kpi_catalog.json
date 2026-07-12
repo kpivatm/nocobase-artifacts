@@ -1,0 +1,67 @@
+{
+  "data": {
+    "id": 374975325143040,
+    "createdAt": "2026-07-12T03:16:08.803Z",
+    "updatedAt": "2026-07-12T03:16:08.803Z",
+    "dataSourceKey": "main",
+    "roleName": "specialist",
+    "name": "kpi_catalog",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374975325143041,
+        "createdAt": "2026-07-12T03:16:08.813Z",
+        "updatedAt": "2026-07-12T03:16:08.825Z",
+        "name": "list",
+        "fields": [
+          "code",
+          "created_at",
+          "definition",
+          "direction",
+          "formula",
+          "group",
+          "id",
+          "name",
+          "responsible",
+          "source",
+          "status",
+          "threshold_green",
+          "threshold_red",
+          "threshold_yellow",
+          "unit",
+          "updated_at",
+          "weight_default"
+        ],
+        "scopeId": 374975325143042,
+        "rolesResourceId": 374975325143040
+      },
+      {
+        "id": 374975325143043,
+        "createdAt": "2026-07-12T03:16:08.828Z",
+        "updatedAt": "2026-07-12T03:16:08.835Z",
+        "name": "get",
+        "fields": [
+          "code",
+          "created_at",
+          "definition",
+          "direction",
+          "formula",
+          "group",
+          "id",
+          "name",
+          "responsible",
+          "source",
+          "status",
+          "threshold_green",
+          "threshold_red",
+          "threshold_yellow",
+          "unit",
+          "updated_at",
+          "weight_default"
+        ],
+        "scopeId": 374975325143044,
+        "rolesResourceId": 374975325143040
+      }
+    ]
+  }
+}

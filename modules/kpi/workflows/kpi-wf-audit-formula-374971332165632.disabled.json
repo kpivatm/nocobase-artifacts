@@ -1,0 +1,149 @@
+{
+  "data": {
+    "id": 374971332165632,
+    "createdAt": "2026-07-12T02:44:24.544Z",
+    "updatedAt": "2026-07-12T08:35:25.757Z",
+    "key": "rjn62gee6qh",
+    "title": "KPI-WF-AUDIT-FORMULA: Ghi lịch sử khi sửa Công thức copy",
+    "enabled": false,
+    "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa định nghĩa/công thức KPI. AC-06 + AC-15.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "definition"
+      ],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374971332165633,
+        "createdAt": "2026-07-12T02:44:24.562Z",
+        "updatedAt": "2026-07-12T04:26:02.081Z",
+        "key": "5f9x74nnfzc",
+        "title": "Ghi kpi_change_history: Công thức",
+        "upstreamId": 374971332165635,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "params": {
+            "values": {
+              "reason": "{{$context.data.change_reason}}",
+              "version": "{{$jobsMapByNodeKey.b08t4i7yga5.result}}",
+              "changed_field": "Công thức (definition)",
+              "kpi": "{{$context.data.id}}",
+              "new_value": "{{$context.data.definition}}",
+              "changed_by": "{{$context.data.updatedById}}",
+              "old_value": "{{$jobsMapByNodeKey.28tpuegva7t.new_value}}",
+              "changed_at": "{{$context.data.updatedAt}}"
+            }
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971332165632
+      },
+      {
+        "id": 374971332165635,
+        "createdAt": "2026-07-12T02:44:24.569Z",
+        "updatedAt": "2026-07-12T04:26:02.152Z",
+        "key": "b08t4i7yga5",
+        "title": "Tính version mới (count+1)",
+        "upstreamId": 374971332165636,
+        "branchIndex": null,
+        "downstreamId": 374971332165633,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "engine": "math.js",
+            "expression": "$jobsMapByNodeKey.ijlst47x61w.version + 1"
+          }
+        },
+        "workflowId": 374971332165632
+      },
+      {
+        "id": 374971332165636,
+        "createdAt": "2026-07-12T02:44:24.571Z",
+        "updatedAt": "2026-07-12T02:44:24.579Z",
+        "key": "28tpuegva7t",
+        "title": "Old value: entry trước cho Công thức",
+        "upstreamId": 374971332165634,
+        "branchIndex": null,
+        "downstreamId": 374971332165635,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "Công thức (definition)"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374971332165632
+      },
+      {
+        "id": 374971332165634,
+        "createdAt": "2026-07-12T02:44:24.566Z",
+        "updatedAt": "2026-07-12T04:12:42.081Z",
+        "key": "ijlst47x61w",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374971332165636,
+        "type": "query",
+        "config": {
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "limit": 1
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971332165632
+      }
+    ]
+  }
+}

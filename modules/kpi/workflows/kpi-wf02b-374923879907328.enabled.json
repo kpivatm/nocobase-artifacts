@@ -1,0 +1,68 @@
+{
+  "data": {
+    "id": 374923879907328,
+    "createdAt": "2026-07-11T20:27:17.200Z",
+    "updatedAt": "2026-07-12T00:58:02.907Z",
+    "key": "w1jhbjrj47c",
+    "title": "KPI-WF02b: Thông báo CB Quản lý khi sửa KPI",
+    "enabled": true,
+    "description": "Khi Quản trị sửa thông tin KPI (không bao gồm thay đổi status — xem WF-DISABLE-STATUS), thông báo in-app cho tất cả Cán bộ quản lý.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "name",
+        "definition",
+        "unit",
+        "frequency",
+        "bsc_dimension",
+        "kpi_type",
+        "direction",
+        "data_source",
+        "weight_default",
+        "threshold_green",
+        "threshold_yellow",
+        "threshold_red",
+        "count_in_score",
+        "notes"
+      ],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374923888295936,
+        "createdAt": "2026-07-11T20:27:21.701Z",
+        "updatedAt": "2026-07-12T00:05:09.323Z",
+        "key": "23rwlgczuze",
+        "title": "Thông báo: sửa KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "manager"
+            ]
+          },
+          "title": "Quản trị vừa sửa KPI",
+          "content": "KPI {{$context.data.code}} - {{$context.data.name}} vừa được cập nhật bởi Quản trị hệ thống."
+        },
+        "workflowId": 374923879907328
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "data": {
+    "id": 374923292704784,
+    "createdAt": "2026-07-11T20:22:37.172Z",
+    "updatedAt": "2026-07-11T20:22:37.172Z",
+    "dataSourceKey": "main",
+    "roleName": "sysadmin",
+    "name": "kpi_proposals",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374957885227010,
+        "createdAt": "2026-07-12T00:57:32.744Z",
+        "updatedAt": "2026-07-12T00:57:32.744Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "content",
+          "createdAt",
+          "createdBy",
+          "id",
+          "kpi",
+          "proposed_by",
+          "reject_reason",
+          "reviewed_at",
+          "reviewed_by",
+          "status",
+          "type",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923292704784
+      },
+      {
+        "id": 374957885227011,
+        "createdAt": "2026-07-12T00:57:32.747Z",
+        "updatedAt": "2026-07-12T00:57:32.747Z",
+        "name": "update",
+        "fields": [
+          "code",
+          "content",
+          "createdAt",
+          "createdBy",
+          "id",
+          "kpi",
+          "proposed_by",
+          "reject_reason",
+          "reviewed_at",
+          "reviewed_by",
+          "status",
+          "type",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923292704784
+      }
+    ]
+  }
+}

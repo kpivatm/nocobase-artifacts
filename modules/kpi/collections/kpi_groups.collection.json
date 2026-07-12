@@ -1,0 +1,209 @@
+{
+  "data": {
+    "key": "hdrdcdzk4b0",
+    "name": "kpi_groups",
+    "title": "Nhóm KPI",
+    "inherit": false,
+    "hidden": false,
+    "description": "Nhóm phân loại KPI theo BCKS Phụ lục 3",
+    "fields": [
+      {
+        "key": "k4kjbu67bv3",
+        "name": "id",
+        "type": "snowflakeId",
+        "interface": "snowflakeId",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "ID",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "separator": "0.00",
+            "step": "1"
+          },
+          "x-validator": "integer"
+        },
+        "primaryKey": true,
+        "allowNull": false,
+        "autoIncrement": false
+      },
+      {
+        "key": "0qlzu7z7soa",
+        "name": "createdAt",
+        "type": "date",
+        "interface": "createdAt",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "datetime",
+          "title": "Created at",
+          "x-component": "DatePicker",
+          "x-read-pretty": true
+        },
+        "field": "createdAt"
+      },
+      {
+        "key": "vy8rluc1stm",
+        "name": "createdBy",
+        "type": "belongsTo",
+        "interface": "createdBy",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "object",
+          "title": "Created by",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "fieldNames": {
+              "value": "id",
+              "label": "nickname"
+            }
+          },
+          "x-read-pretty": true
+        },
+        "target": "users",
+        "foreignKey": "createdById",
+        "targetKey": "id"
+      },
+      {
+        "key": "w3ip14jzanl",
+        "name": "updatedAt",
+        "type": "date",
+        "interface": "updatedAt",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "datetime",
+          "title": "Last updated at",
+          "x-component": "DatePicker",
+          "x-read-pretty": true
+        },
+        "field": "updatedAt"
+      },
+      {
+        "key": "sdmtprujltf",
+        "name": "updatedBy",
+        "type": "belongsTo",
+        "interface": "updatedBy",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "object",
+          "title": "Last updated by",
+          "x-component": "AssociationField",
+          "x-component-props": {
+            "fieldNames": {
+              "value": "id",
+              "label": "nickname"
+            }
+          },
+          "x-read-pretty": true
+        },
+        "target": "users",
+        "foreignKey": "updatedById",
+        "targetKey": "id"
+      },
+      {
+        "key": "u69k2tv2rjx",
+        "name": "code",
+        "type": "string",
+        "interface": "input",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "validation": {
+          "type": "string",
+          "rules": [
+            {
+              "name": "required",
+              "key": "r_mhmbq6khosx"
+            }
+          ]
+        },
+        "uiSchema": {
+          "type": "string",
+          "title": "Mã nhóm",
+          "x-component": "Input"
+        }
+      },
+      {
+        "key": "ce47m24v23g",
+        "name": "name",
+        "type": "string",
+        "interface": "input",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "validation": {
+          "type": "string",
+          "rules": [
+            {
+              "name": "required",
+              "key": "r_bj2o23idrny"
+            }
+          ]
+        },
+        "uiSchema": {
+          "type": "string",
+          "title": "Tên nhóm",
+          "x-component": "Input"
+        }
+      },
+      {
+        "key": "hk4fk9g7wc2",
+        "name": "description",
+        "type": "text",
+        "interface": "textarea",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "string",
+          "title": "Mô tả",
+          "x-component": "Input.TextArea"
+        }
+      },
+      {
+        "key": "gbe050b6d8o",
+        "name": "order",
+        "type": "bigInt",
+        "interface": "integer",
+        "description": null,
+        "collectionName": "kpi_groups",
+        "parentKey": null,
+        "reverseKey": null,
+        "uiSchema": {
+          "type": "number",
+          "title": "Thứ tự hiển thị",
+          "x-component": "InputNumber",
+          "x-component-props": {
+            "stringMode": true,
+            "step": "1"
+          },
+          "x-validator": "integer"
+        }
+      }
+    ],
+    "template": "general",
+    "logging": true,
+    "autoGenId": false,
+    "titleField": "id",
+    "filterTargetKey": "id",
+    "unavailableActions": []
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "data": {
+    "id": 374958382252032,
+    "createdAt": "2026-07-12T01:01:29.875Z",
+    "updatedAt": "2026-07-12T01:02:43.923Z",
+    "key": "oaqir4uvyme",
+    "title": "KPI-WF05: Kiểm tra tổng trọng số BSC = 100%",
+    "enabled": true,
+    "description": "Sau mỗi thao tác thêm/sửa KPI catalog, kiểm tra tổng trọng số theo từng khía cạnh BSC. Ghi log nếu != 100%.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 3,
+      "appends": [],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374958382252033,
+        "createdAt": "2026-07-12T01:01:29.904Z",
+        "updatedAt": "2026-07-12T01:02:43.917Z",
+        "key": "kkileevka9p",
+        "title": "Cảnh báo tổng trọng số BSC",
+        "upstreamId": 374958537441280,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "sysadmin"
+            ]
+          },
+          "title": "Cảnh báo: Tổng trọng số BSC != 100%",
+          "content": "Sau thay đổi KPI {{$context.data.code}}, khía cạnh BSC {{$context.data.bsc_dimension}} có tổng trọng số = {{$jobsMapByNodeKey.yblu46bbtfe.result}}% (kiểm tra lại nếu != 100%)."
+        },
+        "workflowId": 374958382252032
+      },
+      {
+        "id": 374958537441280,
+        "createdAt": "2026-07-12T01:02:43.909Z",
+        "updatedAt": "2026-07-12T01:02:43.919Z",
+        "key": "k201i4cuadn",
+        "title": "Kiểm tra: tổng trọng số != 100%",
+        "upstreamId": 374958382252034,
+        "branchIndex": null,
+        "downstreamId": 374958382252033,
+        "type": "condition",
+        "config": {
+          "rejectOnFalse": false,
+          "calculation": {
+            "calculator": "notEquals",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "yblu46bbtfe"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "workflowId": 374958382252032
+      },
+      {
+        "id": 374958382252034,
+        "createdAt": "2026-07-12T01:01:29.907Z",
+        "updatedAt": "2026-07-12T01:02:43.921Z",
+        "key": "yblu46bbtfe",
+        "title": "Tính tổng trọng số cùng BSC",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374958537441280,
+        "type": "query",
+        "config": {
+          "collection": "kpi_catalog",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "bsc_dimension": {
+                    "$eq": "{{$context.data.bsc_dimension}}"
+                  }
+                },
+                {
+                  "status": {
+                    "$eq": "Đang hoạt động"
+                  }
+                }
+              ]
+            },
+            "aggregate": "sum",
+            "field": "weight_default"
+          }
+        },
+        "workflowId": 374958382252032
+      }
+    ]
+  }
+}

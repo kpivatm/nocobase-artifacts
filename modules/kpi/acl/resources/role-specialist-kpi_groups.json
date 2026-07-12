@@ -1,0 +1,28 @@
+{
+  "data": {
+    "id": 374923353522176,
+    "createdAt": "2026-07-11T20:23:06.643Z",
+    "updatedAt": "2026-07-11T20:23:06.643Z",
+    "dataSourceKey": "main",
+    "roleName": "specialist",
+    "name": "kpi_groups",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923353522177,
+        "createdAt": "2026-07-11T20:23:06.651Z",
+        "updatedAt": "2026-07-11T20:23:06.651Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "description",
+          "id",
+          "name",
+          "order"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923353522176
+      }
+    ]
+  }
+}

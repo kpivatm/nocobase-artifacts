@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "id": 374923353522176,
+      "createdAt": "2026-07-11T20:23:06.643Z",
+      "updatedAt": "2026-07-11T20:23:06.643Z",
+      "dataSourceKey": "main",
+      "roleName": "specialist",
+      "name": "kpi_groups",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374923353522180,
+      "createdAt": "2026-07-11T20:23:06.719Z",
+      "updatedAt": "2026-07-11T20:23:06.719Z",
+      "dataSourceKey": "main",
+      "roleName": "specialist",
+      "name": "kpi_change_history",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374923353522181,
+      "createdAt": "2026-07-11T20:23:06.737Z",
+      "updatedAt": "2026-07-11T20:23:06.737Z",
+      "dataSourceKey": "main",
+      "roleName": "specialist",
+      "name": "kpi_proposals",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374975325143040,
+      "createdAt": "2026-07-12T03:16:08.803Z",
+      "updatedAt": "2026-07-12T03:16:08.803Z",
+      "dataSourceKey": "main",
+      "roleName": "specialist",
+      "name": "kpi_catalog",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374975471943680,
+      "createdAt": "2026-07-12T03:17:18.015Z",
+      "updatedAt": "2026-07-12T03:17:18.015Z",
+      "dataSourceKey": "main",
+      "roleName": "specialist",
+      "name": "kpi_catalog",
+      "usingActionsConfig": true
+    }
+  ],
+  "meta": {
+    "count": 5,
+    "page": 1,
+    "pageSize": 20,
+    "totalPage": 1
+  }
+}

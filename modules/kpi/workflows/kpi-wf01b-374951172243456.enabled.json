@@ -1,0 +1,52 @@
+{
+  "data": {
+    "id": 374951172243456,
+    "createdAt": "2026-07-12T00:04:11.581Z",
+    "updatedAt": "2026-07-12T00:05:34.878Z",
+    "key": "ng8c6rb702e",
+    "title": "KPI-WF01b: Thông báo CB Quản lý khi thêm KPI",
+    "enabled": true,
+    "description": null,
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 1,
+      "appends": [],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374951172243457,
+        "createdAt": "2026-07-12T00:04:11.598Z",
+        "updatedAt": "2026-07-12T00:04:47.789Z",
+        "key": "gmw8h95g1kv",
+        "title": "Thông báo: thêm KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "role",
+            "value": [
+              "manager"
+            ]
+          },
+          "title": "Quản trị vừa thêm KPI mới",
+          "content": "KPI {{$context.data.code}} - {{$context.data.name}} vừa được thêm bởi Quản trị hệ thống."
+        },
+        "workflowId": 374951172243456
+      }
+    ]
+  }
+}

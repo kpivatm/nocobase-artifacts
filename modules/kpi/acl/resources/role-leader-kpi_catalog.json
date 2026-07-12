@@ -1,0 +1,45 @@
+{
+  "data": {
+    "id": 374923345133570,
+    "createdAt": "2026-07-11T20:23:02.306Z",
+    "updatedAt": "2026-07-11T20:23:02.306Z",
+    "dataSourceKey": "main",
+    "roleName": "leader",
+    "name": "kpi_catalog",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923345133571,
+        "createdAt": "2026-07-11T20:23:02.314Z",
+        "updatedAt": "2026-07-12T01:18:38.145Z",
+        "name": "view",
+        "fields": [
+          "bsc_dimension",
+          "change_history",
+          "change_reason",
+          "code",
+          "count_in_score",
+          "createdAt",
+          "data_source",
+          "definition",
+          "direction",
+          "frequency",
+          "group",
+          "id",
+          "kpi_type",
+          "name",
+          "notes",
+          "status",
+          "threshold_green",
+          "threshold_red",
+          "threshold_yellow",
+          "unit",
+          "updatedAt",
+          "weight_default"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923345133570
+      }
+    ]
+  }
+}

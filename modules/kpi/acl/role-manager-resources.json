@@ -1,0 +1,46 @@
+{
+  "data": [
+    {
+      "id": 374923317870592,
+      "createdAt": "2026-07-11T20:22:49.146Z",
+      "updatedAt": "2026-07-11T20:22:49.146Z",
+      "dataSourceKey": "main",
+      "roleName": "manager",
+      "name": "kpi_groups",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374923317870595,
+      "createdAt": "2026-07-11T20:22:49.187Z",
+      "updatedAt": "2026-07-11T20:22:49.187Z",
+      "dataSourceKey": "main",
+      "roleName": "manager",
+      "name": "kpi_catalog",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374923317870598,
+      "createdAt": "2026-07-11T20:22:49.216Z",
+      "updatedAt": "2026-07-11T20:22:49.216Z",
+      "dataSourceKey": "main",
+      "roleName": "manager",
+      "name": "kpi_change_history",
+      "usingActionsConfig": true
+    },
+    {
+      "id": 374923317870600,
+      "createdAt": "2026-07-11T20:22:49.240Z",
+      "updatedAt": "2026-07-11T20:22:49.240Z",
+      "dataSourceKey": "main",
+      "roleName": "manager",
+      "name": "kpi_proposals",
+      "usingActionsConfig": true
+    }
+  ],
+  "meta": {
+    "count": 4,
+    "page": 1,
+    "pageSize": 20,
+    "totalPage": 1
+  }
+}

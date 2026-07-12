@@ -1,0 +1,54 @@
+{
+  "data": {
+    "id": 374923317870600,
+    "createdAt": "2026-07-11T20:22:49.240Z",
+    "updatedAt": "2026-07-11T20:22:49.240Z",
+    "dataSourceKey": "main",
+    "roleName": "manager",
+    "name": "kpi_proposals",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923317870601,
+        "createdAt": "2026-07-11T20:22:49.244Z",
+        "updatedAt": "2026-07-11T20:22:49.244Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "content",
+          "createdAt",
+          "id",
+          "kpi",
+          "proposed_by",
+          "reject_reason",
+          "reviewed_at",
+          "reviewed_by",
+          "status",
+          "type",
+          "updatedAt"
+        ],
+        "scopeId": 374470177849345,
+        "rolesResourceId": 374923317870600
+      },
+      {
+        "id": 374923317870602,
+        "createdAt": "2026-07-11T20:22:49.247Z",
+        "updatedAt": "2026-07-11T20:22:49.247Z",
+        "name": "create",
+        "fields": [
+          "code",
+          "content",
+          "createdAt",
+          "id",
+          "kpi",
+          "proposed_by",
+          "status",
+          "type",
+          "updatedAt"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870600
+      }
+    ]
+  }
+}

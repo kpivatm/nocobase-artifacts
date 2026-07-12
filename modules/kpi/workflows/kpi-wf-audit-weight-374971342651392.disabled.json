@@ -1,0 +1,160 @@
+{
+  "data": {
+    "id": 374971342651392,
+    "createdAt": "2026-07-12T02:44:29.051Z",
+    "updatedAt": "2026-07-12T08:35:30.172Z",
+    "key": "bo9mzdr8z7c",
+    "title": "KPI-WF-AUDIT-WEIGHT: Ghi lịch sử khi sửa Trọng số copy",
+    "enabled": false,
+    "description": "B1 fix: ghi kpi_change_history khi Quản trị sửa trọng số BSC. AC-06 + AC-15.",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [],
+      "changed": [
+        "weight_default"
+      ],
+      "collection": "kpi_catalog"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": null,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374971342651394,
+        "createdAt": "2026-07-12T02:44:29.071Z",
+        "updatedAt": "2026-07-12T04:12:41.957Z",
+        "key": "a9f3gggk55i",
+        "title": "Count: version mới nhất cho KPI",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": 374971342651396,
+        "type": "query",
+        "config": {
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "limit": 1
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971342651392
+      },
+      {
+        "id": 374971342651393,
+        "createdAt": "2026-07-12T02:44:29.068Z",
+        "updatedAt": "2026-07-12T04:08:14.527Z",
+        "key": "gent27z4m6d",
+        "title": "Ghi kpi_change_history: Trọng số",
+        "upstreamId": 374971342651395,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "create",
+        "config": {
+          "params": {
+            "values": {
+              "changed_field": "Trọng số BSC (weight_default)",
+              "changed_by": "{{$context.data.updatedById}}",
+              "old_value": "{{$jobsMapByNodeKey.uh63zrbxbkm.new_value}}",
+              "changed_at": "{{$context.data.updatedAt}}",
+              "reason": "{{$context.data.change_reason}}",
+              "version": "{{$jobsMapByNodeKey.b2t23h0js3m.result}}",
+              "kpi": "{{$context.data.id}}",
+              "new_value": "{{$context.data.weight_default}}"
+            }
+          },
+          "collection": "kpi_change_history"
+        },
+        "workflowId": 374971342651392
+      },
+      {
+        "id": 374971342651396,
+        "createdAt": "2026-07-12T02:44:29.077Z",
+        "updatedAt": "2026-07-12T02:44:29.085Z",
+        "key": "uh63zrbxbkm",
+        "title": "Query: old_value cho Trọng số",
+        "upstreamId": 374971342651394,
+        "branchIndex": null,
+        "downstreamId": 374971342651395,
+        "type": "query",
+        "config": {
+          "collection": "kpi_change_history",
+          "params": {
+            "filter": {
+              "$and": [
+                {
+                  "kpiId": {
+                    "$eq": "{{$context.data.id}}"
+                  }
+                },
+                {
+                  "changed_field": {
+                    "$eq": "Trọng số BSC (weight_default)"
+                  }
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "version",
+                "order": "desc"
+              }
+            ],
+            "page": 1,
+            "pageSize": 1
+          }
+        },
+        "workflowId": 374971342651392
+      },
+      {
+        "id": 374971342651395,
+        "createdAt": "2026-07-12T02:44:29.075Z",
+        "updatedAt": "2026-07-12T04:08:14.273Z",
+        "key": "b2t23h0js3m",
+        "title": "Calc: version = count + 1",
+        "upstreamId": 374971342651396,
+        "branchIndex": null,
+        "downstreamId": 374971342651393,
+        "type": "calculation",
+        "config": {
+          "calculation": {
+            "calculator": "add",
+            "operands": [
+              {
+                "type": "jobsMapByNodeKey",
+                "options": {
+                  "nodeKey": "a9f3gggk55i"
+                }
+              },
+              {
+                "type": "constant",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "workflowId": 374971342651392
+      }
+    ]
+  }
+}

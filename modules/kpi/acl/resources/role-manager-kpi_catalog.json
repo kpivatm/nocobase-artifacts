@@ -1,0 +1,77 @@
+{
+  "data": {
+    "id": 374923317870595,
+    "createdAt": "2026-07-11T20:22:49.187Z",
+    "updatedAt": "2026-07-11T20:22:49.187Z",
+    "dataSourceKey": "main",
+    "roleName": "manager",
+    "name": "kpi_catalog",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923317870596,
+        "createdAt": "2026-07-11T20:22:49.191Z",
+        "updatedAt": "2026-07-12T01:18:38.121Z",
+        "name": "view",
+        "fields": [
+          "bsc_dimension",
+          "change_history",
+          "change_reason",
+          "code",
+          "count_in_score",
+          "createdAt",
+          "data_source",
+          "definition",
+          "direction",
+          "frequency",
+          "group",
+          "id",
+          "kpi_type",
+          "name",
+          "notes",
+          "status",
+          "threshold_green",
+          "threshold_red",
+          "threshold_yellow",
+          "unit",
+          "updatedAt",
+          "weight_default"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870595
+      },
+      {
+        "id": 374923317870597,
+        "createdAt": "2026-07-11T20:22:49.194Z",
+        "updatedAt": "2026-07-12T01:18:38.132Z",
+        "name": "export",
+        "fields": [
+          "bsc_dimension",
+          "change_history",
+          "change_reason",
+          "code",
+          "count_in_score",
+          "createdAt",
+          "data_source",
+          "definition",
+          "direction",
+          "frequency",
+          "group",
+          "id",
+          "kpi_type",
+          "name",
+          "notes",
+          "status",
+          "threshold_green",
+          "threshold_red",
+          "threshold_yellow",
+          "unit",
+          "updatedAt",
+          "weight_default"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870595
+      }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "data": {
+    "id": 374923718426624,
+    "createdAt": "2026-07-11T20:26:00.403Z",
+    "updatedAt": "2026-07-12T00:02:47.453Z",
+    "key": "likzd54v6g9",
+    "title": "KPI-WF02: Thông báo từ chối đề xuất cho CB Quản lý",
+    "enabled": true,
+    "description": "Khi Quản trị từ chối đề xuất KPI, thông báo in-app kèm lý do cho Cán bộ quản lý đã gửi",
+    "type": "collection",
+    "triggerTitle": null,
+    "config": {
+      "mode": 2,
+      "appends": [
+        "proposed_by"
+      ],
+      "changed": [
+        "status"
+      ],
+      "condition": {
+        "$and": [
+          {
+            "status": {
+              "$eq": "rejected"
+            }
+          }
+        ]
+      },
+      "collection": "kpi_proposals"
+    },
+    "executed": 0,
+    "allExecuted": 0,
+    "current": true,
+    "sync": false,
+    "options": {
+      "timeout": 0
+    },
+    "createdById": 1,
+    "updatedById": 1,
+    "nodes": [
+      {
+        "id": 374923745689600,
+        "createdAt": "2026-07-11T20:26:13.882Z",
+        "updatedAt": "2026-07-11T20:26:13.882Z",
+        "key": "6v535pguo0g",
+        "title": "Thông báo CB Quản lý: Đề xuất bị từ chối",
+        "upstreamId": null,
+        "branchIndex": null,
+        "downstreamId": null,
+        "type": "notification",
+        "config": {
+          "channelName": "in-app-message",
+          "receivers": {
+            "type": "userId",
+            "value": [
+              "{{$context.data.proposed_by.id}}"
+            ]
+          },
+          "title": "Đề xuất KPI của bạn đã bị từ chối",
+          "content": "Đề xuất ({{$context.data.code}}) bị từ chối. Lý do: {{$context.data.reject_reason}}"
+        },
+        "workflowId": 374923718426624
+      }
+    ]
+  }
+}

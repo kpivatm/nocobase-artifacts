@@ -1,0 +1,176 @@
+{
+  "data": {
+    "document": {
+      "version": "1",
+      "mode": "replace",
+      "target": {
+        "pageSchemaUid": "kpi_dmc_route"
+      },
+      "page": {
+        "title": "Danh mục KPI",
+        "icon": "OrderedListOutlined",
+        "enableHeader": true,
+        "enableTabs": false,
+        "displayTitle": true
+      },
+      "tabs": [
+        {
+          "key": "tab_1",
+          "title": "Danh mục KPI",
+          "blocks": [
+            {
+              "key": "jsBlock_1",
+              "type": "jsBlock",
+              "settings": {
+                "version": "v2",
+                "code": "// KPI-26 / KPI-27 — KpiViewSwitcher + BSC Quadrant View + Card Grid View (KPI Catalog)\n// Self-contained JS block. Owns the 3-way view switcher (Bảng / BSC / Cards),\n// renders the BSC Quadrant view, the Card Grid view (KPI-27) and its own detail\n// drawer, and shows/hides the native table block (kpi_dmc_table) for \"Bảng\".\ntry {\n  const VIEW_KEY = 'kpi_catalog_view';\n  const NATIVE_TABLE_UID = 'kpi_dmc_table';\n  const ACTIVE = 'Đang hoạt động';\n  const CARD_PAGE = 12; // Card view: \"Load more\" batch size.\n\n  // BSC dimensions keyed by the RAW stored value of kpi_catalog.bsc_dimension.\n  const DIMS = [\n    { value: 'Tài chính',        label: 'Tài chính',            color: '#1890ff', icon: '💰' },\n    { value: 'Khách hàng',       label: 'Khách hàng',           color: '#52c41a', icon: '🤝' },\n    { value: 'Quy trình nội bộ', label: 'Quy trình nội bộ',     color: '#fa8c16', icon: '⚙️' },\n    { value: 'Học tập & PT',     label: 'Học tập & Phát triển', color: '#722ed1', icon: '📚' },\n  ];\n\n  const host = (ctx.element && (ctx.element.__el || ctx.element)) || null;\n\n  // The RunJS sandbox forbids sessionStorage/localStorage, so persist the chosen\n  // view on the cached block model instance (kept by the FlowEngine across\n  // in-app navigation). Falls back to the 'bsc' default on a full remount.\n  function readView() {\n    try { return ctx.model ? ctx.model[VIEW_KEY] : null; } catch (e) { return null; }\n  }\n  function saveView(v) {\n    try { if (ctx.model) ctx.model[VIEW_KEY] = v; } catch (e) {}\n  }\n\n  const state = {\n    view: readView() || 'bsc',\n    search: '',\n    status: 'all',\n    dims: DIMS.map(function (d) { return d.value; }),\n    detail: null,\n    loading: true,\n    error: null,\n    rows: [],\n    cardLimit: CARD_PAGE,\n  };\n  if (['table', 'bsc', 'card'].indexOf(state.view) === -1) state.view = 'bsc';\n\n  function esc(v) {\n    return String(v == null ? '' : v)\n      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n      .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n  }\n  function isActive(r) { return String(r.status || '').trim() === ACTIVE; }\n  function num(v) { var n = Number(v); return isNaN(n) ? 0 : n; }\n\n  function styleTag() {\n    return (\n      '<style>' +\n      '.kpi26 * { box-sizing: border-box; }' +\n      '.kpi26 { font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif; color:#1a1a1a; }' +\n      '.kpi26-toolbar { background:#fff; border-radius:8px; padding:12px 16px; display:flex; align-items:center; gap:12px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); flex-wrap:wrap; }' +\n      '.kpi26-tl { display:flex; align-items:center; gap:8px; flex:1; flex-wrap:wrap; }' +\n      '.kpi26-tr { display:flex; align-items:center; gap:8px; }' +\n      '.kpi26-search { border:1px solid #d9d9d9; border-radius:6px; padding:6px 12px; font-size:13px; width:230px; outline:none; color:#333; }' +\n      '.kpi26-sel { border:1px solid #d9d9d9; border-radius:6px; padding:6px 10px; font-size:13px; background:#fff; color:#333; outline:none; }' +\n      '.kpi26-switch { display:flex; border:1px solid #d9d9d9; border-radius:6px; overflow:hidden; }' +\n      '.kpi26-vbtn { padding:6px 14px; font-size:12px; cursor:pointer; background:#fff; border:none; border-right:1px solid #d9d9d9; color:#555; display:flex; align-items:center; gap:5px; transition:all .15s; }' +\n      '.kpi26-vbtn:last-child { border-right:none; }' +\n      '.kpi26-vbtn.active { background:#1890ff; color:#fff; }' +\n      '.kpi26-vbtn:hover:not(.active) { background:#f5f5f5; }' +\n      '.kpi26-legend { display:flex; gap:14px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }' +\n      '.kpi26-lg { display:flex; align-items:center; gap:6px; font-size:12px; color:#555; cursor:pointer; user-select:none; padding:2px 6px; border-radius:6px; }' +\n      '.kpi26-lg.off { opacity:.35; }' +\n      '.kpi26-lg:hover { background:#f5f5f5; }' +\n      '.kpi26-dot { width:10px; height:10px; border-radius:50%; }' +\n      '.kpi26-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }' +\n      '@media(max-width:900px){ .kpi26-grid{ grid-template-columns:1fr; } }' +\n      '.kpi26-quad { background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); overflow:hidden; border-top:4px solid #ccc; }' +\n      '.kpi26-qh { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f0f0f0; }' +\n      '.kpi26-qt { font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }' +\n      '.kpi26-qicon { font-size:18px; }' +\n      '.kpi26-wt { font-size:12px; padding:2px 8px; border-radius:10px; font-weight:600; }' +\n      '.kpi26-wok { background:#f6ffed; color:#52c41a; }' +\n      '.kpi26-wwarn { background:#fff1f0; color:#ff4d4f; animation:kpi26pulse 1.5s infinite; }' +\n      '@keyframes kpi26pulse { 0%,100%{opacity:1} 50%{opacity:.55} }' +\n      '.kpi26-qb { padding:6px 0; max-height:280px; overflow-y:auto; }' +\n      '.kpi26-row { padding:8px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #fafafa; cursor:pointer; transition:background .1s; }' +\n      '.kpi26-row:last-child { border-bottom:none; }' +\n      '.kpi26-row:hover { background:#f5f5f5; }' +\n      '.kpi26-row.paused { opacity:.65; }' +\n      '.kpi26-code { font-size:11px; font-weight:700; font-family:monospace; color:#1890ff; min-width:62px; }' +\n      '.kpi26-name { font-size:13px; flex:1; line-height:1.3; }' +\n      '.kpi26-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }' +\n      '.kpi26-mp { width:60px; height:5px; background:#f0f0f0; border-radius:3px; overflow:hidden; }' +\n      '.kpi26-mpb { height:100%; border-radius:3px; }' +\n      '.kpi26-pct { font-size:11px; color:#888; min-width:30px; text-align:right; }' +\n      '.kpi26-st { font-size:10px; padding:1px 6px; border-radius:10px; }' +\n      '.kpi26-st-a { background:#f6ffed; color:#52c41a; border:1px solid #b7eb8f; }' +\n      '.kpi26-st-p { background:#f5f5f5; color:#999; border:1px solid #e0e0e0; }' +\n      '.kpi26-qf { padding:8px 16px; border-top:1px solid #f0f0f0; font-size:11px; color:#888; display:flex; justify-content:space-between; align-items:center; }' +\n      '.kpi26-viewall { color:#1890ff; cursor:pointer; }' +\n      '.kpi26-empty { padding:20px 16px; font-size:12px; color:#bbb; text-align:center; }' +\n      '.kpi26-ph { background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:60px 20px; text-align:center; color:#999; }' +\n      '.kpi26-ph .big { font-size:34px; margin-bottom:12px; }' +\n      // card grid view (KPI-27)\n      '.kpi26-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }' +\n      '@media(max-width:1023px){ .kpi26-cards{ grid-template-columns:repeat(2,1fr); } }' +\n      '@media(max-width:767px){ .kpi26-cards{ grid-template-columns:1fr; } }' +\n      '.kpi26-card { background:#fff; border-radius:8px; border:1px solid #f0f0f0; border-left:4px solid #d9d9d9; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:12px 14px; cursor:pointer; transition:box-shadow .15s ease,transform .15s ease; display:flex; flex-direction:column; gap:8px; }' +\n      '.kpi26-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.12); transform:translateY(-2px); }' +\n      '.kpi26-card.paused { opacity:.7; }' +\n      '.kpi26-chead { display:flex; align-items:center; gap:8px; }' +\n      '.kpi26-ccode { font-family:monospace; font-weight:700; color:#1890ff; font-size:12px; flex-shrink:0; }' +\n      '.kpi26-cunit { font-size:11px; color:#999; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }' +\n      '.kpi26-cs { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:500; flex-shrink:0; }' +\n      '.kpi26-cs-a { background:#f6ffed; color:#52c41a; border:1px solid #b7eb8f; }' +\n      '.kpi26-cs-p { background:#fff7e6; color:#fa8c16; border:1px solid #ffd591; }' +\n      '.kpi26-cname { font-size:13px; font-weight:500; color:#1a1a1a; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:35px; }' +\n      '.kpi26-clabel { font-size:11px; color:#999; margin-bottom:4px; }' +\n      '.kpi26-cbar { height:6px; background:#f0f0f0; border-radius:3px; overflow:hidden; }' +\n      '.kpi26-cbarf { height:100%; border-radius:3px; }' +\n      '.kpi26-cnums { display:flex; justify-content:space-between; font-size:11px; color:#888; margin-top:6px; }' +\n      '.kpi26-cfoot { display:flex; align-items:center; justify-content:space-between; border-top:1px solid #f5f5f5; padding-top:8px; gap:8px; }' +\n      '.kpi26-cdim { display:flex; align-items:center; gap:6px; font-size:11px; color:#888; overflow:hidden; }' +\n      '.kpi26-cfreq { font-size:11px; color:#999; text-align:right; flex-shrink:0; }' +\n      '.kpi26-more { text-align:center; margin-top:16px; }' +\n      '.kpi26-morebtn { background:#fff; border:1px solid #d9d9d9; border-radius:6px; padding:8px 22px; font-size:13px; color:#555; cursor:pointer; transition:all .15s; }' +\n      '.kpi26-morebtn:hover { border-color:#1890ff; color:#1890ff; }' +\n      // detail drawer\n      '.kpi26-ov { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:1200; display:flex; justify-content:flex-end; }' +\n      '.kpi26-panel { width:460px; max-width:92vw; background:#fff; box-shadow:-4px 0 20px rgba(0,0,0,0.15); display:flex; flex-direction:column; animation:kpi26slide .2s ease; }' +\n      '@keyframes kpi26slide { from{transform:translateX(100%)} to{transform:translateX(0)} }' +\n      '.kpi26-ph2 { padding:16px 20px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; justify-content:space-between; }' +\n      '.kpi26-pt { font-size:16px; font-weight:600; }' +\n      '.kpi26-pcl { cursor:pointer; font-size:20px; color:#999; line-height:1; border:none; background:none; }' +\n      '.kpi26-pb { padding:20px; flex:1; overflow-y:auto; }' +\n      '.kpi26-drow { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }' +\n      '.kpi26-dl { font-size:11px; color:#999; font-weight:600; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }' +\n      '.kpi26-dv { font-size:14px; color:#1a1a1a; word-break:break-word; }' +\n      '</style>'\n    );\n  }\n\n  function progColor(p) { return p >= 80 ? '#52c41a' : (p >= 50 ? '#faad14' : '#ff4d4f'); }\n\n  // Period data (actual/target) is not modeled yet (PH1-04). Render empty bar.\n  function miniProgress(r) {\n    var paused = !isActive(r);\n    var tip = paused ? 'KPI tạm tắt' : 'Chưa có dữ liệu kỳ';\n    return (\n      '<div class=\"kpi26-mp\" title=\"' + esc(tip) + '\"><div class=\"kpi26-mpb\" style=\"width:0%;background:' +\n      (paused ? '#d9d9d9' : '#e6e6e6') + '\"></div></div>' +\n      '<div class=\"kpi26-pct\">—</div>'\n    );\n  }\n\n  function rowHtml(r) {\n    var paused = !isActive(r);\n    var badge = paused\n      ? '<span class=\"kpi26-st kpi26-st-p\" title=\"Tạm tắt\">⏸</span>'\n      : '<span class=\"kpi26-st kpi26-st-a\" title=\"Đang hoạt động\">✓</span>';\n    return (\n      '<div class=\"kpi26-row' + (paused ? ' paused' : '') + '\" data-act=\"detail\" data-id=\"' + esc(r.id) + '\">' +\n      '<div class=\"kpi26-code\">' + esc(r.code) + '</div>' +\n      '<div class=\"kpi26-name\">' + esc(r.name) + '</div>' +\n      '<div class=\"kpi26-right\">' + miniProgress(r) + badge + '</div>' +\n      '</div>'\n    );\n  }\n\n  function passFilter(r) {\n    if (state.status === 'active' && !isActive(r)) return false;\n    if (state.status === 'inactive' && isActive(r)) return false;\n    if (state.search) {\n      var q = state.search.toLowerCase();\n      var hay = (String(r.code || '') + ' ' + String(r.name || '')).toLowerCase();\n      if (hay.indexOf(q) === -1) return false;\n    }\n    return true;\n  }\n\n  function quadHtml(dim) {\n    var inDim = state.rows.filter(function (r) { return r.bsc_dimension === dim.value; });\n    var shown = inDim.filter(passFilter);\n    var weight = inDim.reduce(function (s, r) { return s + (isActive(r) ? num(r.weight_default) : 0); }, 0);\n    var wRounded = Math.round(weight * 100) / 100;\n    var ok = wRounded === 100;\n    var wtCls = ok ? 'kpi26-wok' : 'kpi26-wwarn';\n    var wtTxt = (ok ? '∑ ' : '⚠ ∑ ') + wRounded + '%';\n    var body = shown.length\n      ? shown.map(rowHtml).join('')\n      : '<div class=\"kpi26-empty\">Không có KPI phù hợp</div>';\n    return (\n      '<div class=\"kpi26-quad\" style=\"border-top-color:' + dim.color + '\">' +\n      '<div class=\"kpi26-qh\"><div class=\"kpi26-qt\"><span class=\"kpi26-qicon\">' + dim.icon + '</span>' + esc(dim.label) + '</div>' +\n      '<span class=\"kpi26-wt ' + wtCls + '\">' + wtTxt + '</span></div>' +\n      '<div class=\"kpi26-qb\">' + body + '</div>' +\n      '<div class=\"kpi26-qf\"><span>' + inDim.length + ' KPI · Trọng số: ' + wRounded + '%</span>' +\n      '<span class=\"kpi26-viewall\" data-act=\"viewall\" data-dim=\"' + esc(dim.value) + '\">Xem tất cả →</span></div>' +\n      '</div>'\n    );\n  }\n\n  function bscHtml() {\n    var legend = DIMS.map(function (d) {\n      var off = state.dims.indexOf(d.value) === -1;\n      return '<div class=\"kpi26-lg' + (off ? ' off' : '') + '\" data-act=\"dim\" data-dim=\"' + esc(d.value) + '\">' +\n        '<span class=\"kpi26-dot\" style=\"background:' + d.color + '\"></span>' + esc(d.label) + '</div>';\n    }).join('');\n    var quads = DIMS.filter(function (d) { return state.dims.indexOf(d.value) !== -1; }).map(quadHtml).join('');\n    return (\n      '<div class=\"kpi26-legend\">' + legend +\n      '<div style=\"flex:1\"></div>' +\n      '<div class=\"kpi26-lg\" style=\"color:#ff4d4f;cursor:default\">⚠ Tổng trọng số ≠ 100%</div></div>' +\n      '<div class=\"kpi26-grid\">' + quads + '</div>'\n    );\n  }\n\n  function dimOf(v) { return DIMS.filter(function (d) { return d.value === v; })[0] || null; }\n\n  // Card Grid View (KPI-27). Reuses passFilter (search + status) and the shared\n  // detail drawer via data-act=\"detail\". Period data (actual/target) is not\n  // modeled yet (PH1-04) -> empty bar + \"—\".\n  function cardHtml(r) {\n    var paused = !isActive(r);\n    var dim = dimOf(r.bsc_dimension);\n    var color = dim ? dim.color : '#d9d9d9';\n    var badge = paused\n      ? '<span class=\"kpi26-cs kpi26-cs-p\">Tạm dừng</span>'\n      : '<span class=\"kpi26-cs kpi26-cs-a\">Hoạt động</span>';\n    var dimLabel = dim ? dim.label : 'Chưa phân loại';\n    var freq = r.frequency ? esc(r.frequency) : '—';\n    return (\n      '<div class=\"kpi26-card' + (paused ? ' paused' : '') + '\" style=\"border-left-color:' + color + '\" data-act=\"detail\" data-id=\"' + esc(r.id) + '\">' +\n      '<div class=\"kpi26-chead\">' +\n      '<span class=\"kpi26-ccode\">' + esc(r.code) + '</span>' +\n      '<span class=\"kpi26-cunit\">' + (r.unit ? esc(r.unit) : '') + '</span>' +\n      badge +\n      '</div>' +\n      '<div class=\"kpi26-cname\" title=\"' + esc(r.name) + '\">' + esc(r.name) + '</div>' +\n      '<div>' +\n      '<div class=\"kpi26-clabel\">Tiến độ thực hiện</div>' +\n      '<div class=\"kpi26-cbar\" title=\"Chưa có dữ liệu kỳ\"><div class=\"kpi26-cbarf\" style=\"width:0%;background:' +\n      (paused ? '#d9d9d9' : '#e6e6e6') + '\"></div></div>' +\n      '<div class=\"kpi26-cnums\"><span>TT: —</span><span>MT: — · —</span></div>' +\n      '</div>' +\n      '<div class=\"kpi26-cfoot\">' +\n      '<span class=\"kpi26-cdim\"><span class=\"kpi26-dot\" style=\"width:7px;height:7px;background:' + color + '\"></span>' + esc(dimLabel) + '</span>' +\n      '<span class=\"kpi26-cfreq\">' + freq + '</span>' +\n      '</div>' +\n      '</div>'\n    );\n  }\n\n  function cardGridHtml() {\n    var shown = state.rows.filter(passFilter);\n    if (!shown.length) {\n      return '<div class=\"kpi26-ph\"><div class=\"big\">🃏</div>' +\n        '<div style=\"font-size:15px;color:#888\">Không có KPI phù hợp với bộ lọc hiện tại</div></div>';\n    }\n    var limit = state.cardLimit;\n    var cards = shown.slice(0, limit).map(cardHtml).join('');\n    var more = '';\n    if (shown.length > limit) {\n      more = '<div class=\"kpi26-more\"><button class=\"kpi26-morebtn\" data-act=\"loadmore\">' +\n        'Xem thêm ' + (shown.length - limit) + ' KPI</button></div>';\n    }\n    return '<div class=\"kpi26-cards\">' + cards + '</div>' + more;\n  }\n\n  function detailHtml() {\n    if (!state.detail) return '';\n    var r = state.detail;\n    var dim = DIMS.filter(function (d) { return d.value === r.bsc_dimension; })[0];\n    function cell(label, val) {\n      return '<div><div class=\"kpi26-dl\">' + esc(label) + '</div><div class=\"kpi26-dv\">' + esc(val || '—') + '</div></div>';\n    }\n    var body =\n      '<div style=\"margin-bottom:16px\"><div class=\"kpi26-dl\">Tên chỉ tiêu</div><div class=\"kpi26-dv\" style=\"font-size:15px;font-weight:600\">' + esc(r.name) + '</div></div>' +\n      '<div class=\"kpi26-drow\">' + cell('Khía cạnh BSC', dim ? (dim.icon + ' ' + dim.label) : r.bsc_dimension) + cell('Trạng thái', r.status) + '</div>' +\n      '<div class=\"kpi26-drow\">' + cell('Loại KPI', r.kpi_type) + cell('Hướng tốt', r.direction) + '</div>' +\n      '<div class=\"kpi26-drow\">' + cell('Đơn vị đo', r.unit) + cell('Tần suất', r.frequency) + '</div>' +\n      '<div class=\"kpi26-drow\">' + cell('Trọng số (%)', num(r.weight_default)) + cell('Tính vào điểm', r.count_in_score ? 'Có' : 'Không') + '</div>' +\n      '<div class=\"kpi26-drow\">' + cell('Ngưỡng xanh', r.threshold_green) + cell('Ngưỡng vàng', r.threshold_yellow) + '</div>' +\n      '<div class=\"kpi26-drow\">' + cell('Ngưỡng đỏ', r.threshold_red) + cell('Kỳ dữ liệu', 'Chưa có dữ liệu kỳ') + '</div>' +\n      '<div style=\"margin-bottom:8px\"><div class=\"kpi26-dl\">Định nghĩa</div><div class=\"kpi26-dv\">' + esc(r.definition || '—') + '</div></div>';\n    return (\n      '<div class=\"kpi26-ov\" data-act=\"ovclose\">' +\n      '<div class=\"kpi26-panel\" data-act=\"stop\">' +\n      '<div class=\"kpi26-ph2\"><div class=\"kpi26-pt\">' + esc(r.code) + '</div>' +\n      '<button class=\"kpi26-pcl\" data-act=\"close\">×</button></div>' +\n      '<div class=\"kpi26-pb\">' + body + '</div></div></div>'\n    );\n  }\n\n  function toolbarHtml() {\n    function vbtn(v, label) {\n      return '<button class=\"kpi26-vbtn' + (state.view === v ? ' active' : '') + '\" data-act=\"view\" data-view=\"' + v + '\">' + label + '</button>';\n    }\n    return (\n      '<div class=\"kpi26-toolbar\">' +\n      '<div class=\"kpi26-tl\">' +\n      '<input class=\"kpi26-search\" data-act=\"search\" placeholder=\"🔍  Tìm KPI theo mã, tên...\" value=\"' + esc(state.search) + '\">' +\n      '<select class=\"kpi26-sel\" data-act=\"status\">' +\n      '<option value=\"all\"' + (state.status === 'all' ? ' selected' : '') + '>Tất cả trạng thái</option>' +\n      '<option value=\"active\"' + (state.status === 'active' ? ' selected' : '') + '>Đang hoạt động</option>' +\n      '<option value=\"inactive\"' + (state.status === 'inactive' ? ' selected' : '') + '>Tạm tắt</option>' +\n      '</select></div>' +\n      '<div class=\"kpi26-tr\"><div class=\"kpi26-switch\">' +\n      vbtn('table', '📋 Bảng') + vbtn('bsc', '⊞ BSC') + vbtn('card', '🃏 Cards') +\n      '</div></div></div>'\n    );\n  }\n\n  function contentHtml() {\n    if (state.loading) return '<div class=\"kpi26-ph\"><div class=\"big\">⏳</div>Đang tải dữ liệu KPI...</div>';\n    if (state.error) return '<div class=\"kpi26-ph\"><div class=\"big\">⚠️</div>Lỗi tải dữ liệu: ' + esc(state.error) + '</div>';\n    if (state.view === 'bsc') return bscHtml();\n    if (state.view === 'card') return cardGridHtml();\n    return ''; // table view -> native table shown below\n  }\n\n  // Locate the native table block card WITHOUT touching the `document` global:\n  // walk up from our own host element and search each ancestor's subtree.\n  function nativeTableCard() {\n    var p = host;\n    while (p) {\n      if (p.querySelector) {\n        var byId = p.querySelector('[id=\"model-' + NATIVE_TABLE_UID + '\"]');\n        if (byId) return byId;\n        var tw = p.querySelector('.ant-table-wrapper');\n        if (tw && tw.closest) return tw.closest('[id^=\"model-\"]') || tw.closest('.ant-card') || tw;\n      }\n      p = p.parentElement;\n    }\n    return null;\n  }\n  function setNativeTableVisible(v) {\n    var el = nativeTableCard();\n    if (el) el.style.display = v ? '' : 'none';\n  }\n\n  function render() {\n    if (!host) return;\n    ctx.render('<div class=\"kpi26\">' + styleTag() + toolbarHtml() + contentHtml() + detailHtml() + '</div>');\n    setNativeTableVisible(state.view === 'table');\n  }\n\n  function setView(v) {\n    state.view = v;\n    if (v === 'card') state.cardLimit = CARD_PAGE;\n    saveView(v);\n    render();\n  }\n\n  // Delegated events (bound once on the persistent host element).\n  if (host && !host.__kpi26bound) {\n    host.__kpi26bound = true;\n    host.addEventListener('click', function (e) {\n      var t = e.target.closest('[data-act]');\n      if (!t) return;\n      var act = t.getAttribute('data-act');\n      if (act === 'view') { setView(t.getAttribute('data-view')); return; }\n      if (act === 'loadmore') { state.cardLimit += CARD_PAGE; render(); return; }\n      if (act === 'dim') {\n        var dv = t.getAttribute('data-dim');\n        var i = state.dims.indexOf(dv);\n        if (i === -1) state.dims.push(dv); else if (state.dims.length > 1) state.dims.splice(i, 1);\n        render();\n        return;\n      }\n      if (act === 'detail') {\n        var id = t.getAttribute('data-id');\n        state.detail = state.rows.filter(function (r) { return String(r.id) === String(id); })[0] || null;\n        render();\n        return;\n      }\n      if (act === 'viewall') {\n        var dim = t.getAttribute('data-dim');\n        if (ctx.message) ctx.message.info('Chuyển sang bảng — khía cạnh: ' + dim);\n        setView('table');\n        return;\n      }\n      if (act === 'close' || act === 'ovclose') { state.detail = null; render(); return; }\n      if (act === 'stop') { e.stopPropagation(); return; }\n    });\n    host.addEventListener('input', function (e) {\n      var t = e.target.closest('[data-act=\"search\"]');\n      if (t) { state.search = t.value; state.cardLimit = CARD_PAGE; render(); setTimeout(function () { var s = host.querySelector('[data-act=\"search\"]'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 0); }\n    });\n    host.addEventListener('change', function (e) {\n      var t = e.target.closest('[data-act=\"status\"]');\n      if (t) { state.status = t.value; state.cardLimit = CARD_PAGE; render(); }\n    });\n    host.addEventListener('keydown', function (e) {\n      if (e.key === 'Escape' && state.detail) { state.detail = null; render(); }\n    });\n  }\n\n  render();\n\n  // Data via the NocoBase resource API (required by RunJS authoring rules).\n  function loadData() {\n    var res = ctx.makeResource('MultiRecordResource');\n    if (res.setResourceName) res.setResourceName('kpi_catalog');\n    if (res.setDataSourceKey) res.setDataSourceKey('main');\n    if (res.setPageSize) res.setPageSize(300);\n    if (res.setSort) res.setSort(['code']);\n    if (res.setFields) res.setFields(['id', 'code', 'name', 'bsc_dimension', 'weight_default',\n      'status', 'unit', 'frequency', 'kpi_type', 'direction', 'definition', 'count_in_score',\n      'threshold_green', 'threshold_yellow', 'threshold_red']);\n    return res.refresh().then(function () {\n      var data = res.getData ? res.getData() : [];\n      state.rows = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);\n      state.loading = false;\n      render();\n    });\n  }\n  Promise.resolve().then(loadData).catch(function (err) {\n    state.loading = false;\n    state.error = (err && err.message) || 'unknown';\n    render();\n  });\n} catch (e) {\n  if (ctx && ctx.render) ctx.render('<div style=\"padding:20px;color:#ff4d4f\">KPI-26 block error: ' + String(e && e.message) + '</div>');\n}\n",
+                "showBlockCard": false
+              }
+            },
+            {
+              "key": "table_2",
+              "type": "table",
+              "collection": "kpi_catalog",
+              "sorting": [
+                {
+                  "field": "groupId",
+                  "direction": "asc"
+                },
+                {
+                  "field": "code",
+                  "direction": "asc"
+                }
+              ],
+              "pageSize": 20,
+              "settings": {
+                "sorting": [
+                  {
+                    "field": "groupId",
+                    "direction": "asc"
+                  },
+                  {
+                    "field": "code",
+                    "direction": "asc"
+                  }
+                ],
+                "pageSize": 20
+              },
+              "fields": [
+                {
+                  "key": "code",
+                  "field": "code",
+                  "settings": {}
+                },
+                {
+                  "key": "name",
+                  "field": "name",
+                  "settings": {}
+                },
+                {
+                  "key": "group",
+                  "field": "group",
+                  "titleField": "name",
+                  "settings": {}
+                },
+                {
+                  "key": "bsc_dimension",
+                  "field": "bsc_dimension",
+                  "settings": {}
+                },
+                {
+                  "key": "kpi_type",
+                  "field": "kpi_type",
+                  "settings": {}
+                },
+                {
+                  "key": "unit",
+                  "field": "unit",
+                  "settings": {}
+                },
+                {
+                  "key": "status",
+                  "field": "status",
+                  "settings": {}
+                }
+              ],
+              "actions": [
+                {
+                  "key": "addNew_default_4",
+                  "type": "addNew",
+                  "settings": {
+                    "title": "{{t(\"Add new\")}}",
+                    "icon": "PlusOutlined",
+                    "type": "primary"
+                  }
+                },
+                {
+                  "key": "filter_default_1",
+                  "type": "filter",
+                  "settings": {
+                    "title": "{{t(\"Filter\")}}",
+                    "icon": "FilterOutlined",
+                    "defaultFilter": {
+                      "logic": "$and",
+                      "items": [
+                        {
+                          "path": "code",
+                          "operator": "$includes"
+                        },
+                        {
+                          "path": "name",
+                          "operator": "$includes"
+                        },
+                        {
+                          "path": "status",
+                          "operator": "$eq"
+                        },
+                        {
+                          "path": "bsc_dimension",
+                          "operator": "$eq"
+                        },
+                        {
+                          "path": "kpi_type",
+                          "operator": "$eq"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "refresh_default_2",
+                  "type": "refresh",
+                  "settings": {
+                    "title": "{{t(\"Refresh\")}}",
+                    "icon": "ReloadOutlined"
+                  }
+                }
+              ]
+            }
+          ],
+          "layout": {
+            "rows": [
+              [
+                "table_2"
+              ],
+              [
+                "jsBlock_1"
+              ]
+            ]
+          }
+        }
+      ],
+      "assets": {
+        "scripts": {},
+        "charts": {}
+      }
+    },
+    "source": {
+      "target": {
+        "pageSchemaUid": "kpi_dmc_route"
+      },
+      "pageTitle": "Danh mục KPI"
+    },
+    "warnings": [],
+    "unsupported": []
+  }
+}

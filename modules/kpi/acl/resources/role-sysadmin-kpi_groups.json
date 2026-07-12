@@ -1,0 +1,117 @@
+{
+  "data": {
+    "id": 374923290607616,
+    "createdAt": "2026-07-11T20:22:36.986Z",
+    "updatedAt": "2026-07-11T20:22:36.986Z",
+    "dataSourceKey": "main",
+    "roleName": "sysadmin",
+    "name": "kpi_groups",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923290607617,
+        "createdAt": "2026-07-11T20:22:36.996Z",
+        "updatedAt": "2026-07-11T20:22:36.996Z",
+        "name": "view",
+        "fields": [
+          "code",
+          "createdAt",
+          "createdBy",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      },
+      {
+        "id": 374923292704768,
+        "createdAt": "2026-07-11T20:22:37.003Z",
+        "updatedAt": "2026-07-11T20:22:37.003Z",
+        "name": "create",
+        "fields": [
+          "code",
+          "createdAt",
+          "createdBy",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      },
+      {
+        "id": 374923292704769,
+        "createdAt": "2026-07-11T20:22:37.008Z",
+        "updatedAt": "2026-07-11T20:22:37.008Z",
+        "name": "update",
+        "fields": [
+          "code",
+          "createdAt",
+          "createdBy",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      },
+      {
+        "id": 374923292704770,
+        "createdAt": "2026-07-11T20:22:37.011Z",
+        "updatedAt": "2026-07-11T20:22:37.011Z",
+        "name": "destroy",
+        "fields": [],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      },
+      {
+        "id": 374923292704771,
+        "createdAt": "2026-07-11T20:22:37.014Z",
+        "updatedAt": "2026-07-11T20:22:37.014Z",
+        "name": "export",
+        "fields": [
+          "code",
+          "createdAt",
+          "createdBy",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      },
+      {
+        "id": 374923292704772,
+        "createdAt": "2026-07-11T20:22:37.016Z",
+        "updatedAt": "2026-07-11T20:22:37.016Z",
+        "name": "importXlsx",
+        "fields": [
+          "code",
+          "createdAt",
+          "createdBy",
+          "description",
+          "id",
+          "name",
+          "order",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923290607616
+      }
+    ]
+  }
+}

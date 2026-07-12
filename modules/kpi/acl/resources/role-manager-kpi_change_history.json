@@ -1,0 +1,36 @@
+{
+  "data": {
+    "id": 374923317870598,
+    "createdAt": "2026-07-11T20:22:49.216Z",
+    "updatedAt": "2026-07-11T20:22:49.216Z",
+    "dataSourceKey": "main",
+    "roleName": "manager",
+    "name": "kpi_change_history",
+    "usingActionsConfig": true,
+    "actions": [
+      {
+        "id": 374923317870599,
+        "createdAt": "2026-07-11T20:22:49.222Z",
+        "updatedAt": "2026-07-12T04:14:20.165Z",
+        "name": "view",
+        "fields": [
+          "changed_at",
+          "changed_by",
+          "changed_field",
+          "createdAt",
+          "id",
+          "kpi",
+          "kpiId",
+          "new_value",
+          "next_version",
+          "nv",
+          "old_value",
+          "reason",
+          "version"
+        ],
+        "scopeId": 374470177849344,
+        "rolesResourceId": 374923317870598
+      }
+    ]
+  }
+}
