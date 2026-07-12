@@ -22,13 +22,6 @@ jobs:
       - name: Set up nb CLI
         run: npm install -g @nocobase/cli@2.1.23
 
-      - name: Create revision snapshot (pre-deploy)
-        run: nb revision create --note "pre-deploy-staging-$(git rev-parse --short HEAD)"
-        env:
-          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          NOCOBASE_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
-          NOCOBASE_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
-
       - name: Apply artifacts to Staging
         run: |
           MODULE="${{ github.event.inputs.module || 'kpi' }}"
