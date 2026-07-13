@@ -41,11 +41,14 @@ fi
 if [[ "${CI:-}" == "true" ]]; then
   echo "[nb] Setting up CLI session for CI..."
   NB_ENV_NAME="${ENV}-ci"
-  nb env init "$NB_ENV_NAME" --url "$NOCOBASE_URL" --yes 2>/dev/null || true
-  nb env auth "$NB_ENV_NAME" --auth-type basic \
-    --username "${NOCOBASE_EMAIL}" --password "${NOCOBASE_PASSWORD}" 2>&1 \
-    | grep -E "Authenticated|Error|failed" || true
-  nb env use "$NB_ENV_NAME" 2>/dev/null || true
+  # nb env add creates the env, authenticates, and switches to it in one command.
+  # --api-base-url must include the /api suffix.
+  nb env add "$NB_ENV_NAME" \
+    --api-base-url "${NOCOBASE_URL}/api" \
+    --auth-type basic \
+    --username "${NOCOBASE_EMAIL}" \
+    --password "${NOCOBASE_PASSWORD}" 2>&1 \
+    | grep -E "Authenticated|saved|Error|failed" || true
 fi
 
 # Tạo revision TRƯỚC khi apply (rollback point)
