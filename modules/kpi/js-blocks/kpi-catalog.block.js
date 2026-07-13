@@ -2,19 +2,23 @@
 // Self-contained JS block. Owns the 3-way view switcher (Bảng / BSC / Cards),
 // renders the BSC Quadrant view, the Card Grid view (KPI-27) and its own detail
 // drawer, and shows/hides the native table block (kpi_dmc_table) for "Bảng".
+// KPI-31: BSC dimensions are fetched from the `bsc_dimensions` collection; this
+// array is the graceful-degradation fallback when the collection is empty.
 try {
   const VIEW_KEY = 'kpi_catalog_view';
   const NATIVE_TABLE_UID = 'kpi_dmc_table';
   const ACTIVE = 'Đang hoạt động';
   const CARD_PAGE = 12; // Card view: "Load more" batch size.
 
-  // BSC dimensions keyed by the RAW stored value of kpi_catalog.bsc_dimension.
-  const DIMS = [
-    { value: 'Tài chính',        label: 'Tài chính',            color: '#1890ff', icon: '💰' },
-    { value: 'Khách hàng',       label: 'Khách hàng',           color: '#52c41a', icon: '🤝' },
-    { value: 'Quy trình nội bộ', label: 'Quy trình nội bộ',     color: '#fa8c16', icon: '⚙️' },
-    { value: 'Học tập & PT',     label: 'Học tập & Phát triển', color: '#722ed1', icon: '📚' },
+  var DIMS_FALLBACK = [
+    { value: 'Tài chính',        label: 'Tài chính',            color: '#1890ff', icon: '💰', code: 'finance',  order: 1 },
+    { value: 'Khách hàng',       label: 'Khách hàng',           color: '#52c41a', icon: '🤝', code: 'customer', order: 2 },
+    { value: 'Quy trình nội bộ', label: 'Quy trình nội bộ',     color: '#fa8c16', icon: '⚙️', code: 'process',  order: 3 },
+    { value: 'Học tập & PT',     label: 'Học tập & Phát triển', color: '#722ed1', icon: '📚', code: 'learning', order: 4 },
   ];
+
+  // Starts with fallback; replaced by DB data after loadDims() resolves.
+  var DIMS = DIMS_FALLBACK.slice();
 
   const host = (ctx.element && (ctx.element.__el || ctx.element)) || null;
 
@@ -175,8 +179,8 @@ try {
     return true;
   }
 
-  function quadHtml(dim) {
-    var inDim = state.rows.filter(function (r) { return r.bsc_dimension === dim.value; });
+  function quadHtml(dim, items) {
+    var inDim = items || state.rows.filter(function (r) { return r.bsc_dimension === dim.value; });
     var shown = inDim.filter(passFilter);
     var weight = inDim.reduce(function (s, r) { return s + (isActive(r) ? num(r.weight_default) : 0); }, 0);
     var wRounded = Math.round(weight * 100) / 100;
@@ -198,17 +202,37 @@ try {
   }
 
   function bscHtml() {
+    // Build grouped map: each dim key → rows; plus __unclassified__ bucket
+    var grouped = {};
+    DIMS.forEach(function (d) { grouped[d.value] = []; });
+    var unclassified = [];
+    state.rows.forEach(function (r) {
+      if (Object.prototype.hasOwnProperty.call(grouped, r.bsc_dimension)) {
+        grouped[r.bsc_dimension].push(r);
+      } else {
+        unclassified.push(r);
+      }
+    });
+
     var legend = DIMS.map(function (d) {
       var off = state.dims.indexOf(d.value) === -1;
       return '<div class="kpi26-lg' + (off ? ' off' : '') + '" data-act="dim" data-dim="' + esc(d.value) + '">' +
         '<span class="kpi26-dot" style="background:' + d.color + '"></span>' + esc(d.label) + '</div>';
     }).join('');
-    var quads = DIMS.filter(function (d) { return state.dims.indexOf(d.value) !== -1; }).map(quadHtml).join('');
+    var quads = DIMS.filter(function (d) { return state.dims.indexOf(d.value) !== -1; })
+      .map(function (d) { return quadHtml(d, grouped[d.value]); }).join('');
+    var unclassifiedHtml = '';
+    if (unclassified.length > 0) {
+      unclassifiedHtml = quadHtml(
+        { value: '__unclassified__', label: 'Chưa phân loại', color: '#999', icon: '❓' },
+        unclassified
+      );
+    }
     return (
       '<div class="kpi26-legend">' + legend +
       '<div style="flex:1"></div>' +
       '<div class="kpi26-lg" style="color:#ff4d4f;cursor:default">⚠ Tổng trọng số ≠ 100%</div></div>' +
-      '<div class="kpi26-grid">' + quads + '</div>'
+      '<div class="kpi26-grid">' + quads + unclassifiedHtml + '</div>'
     );
   }
 
@@ -395,6 +419,39 @@ try {
 
   render();
 
+  // Fetch bsc_dimensions from DB; fall back to DIMS_FALLBACK if empty or error.
+  // Runs before loadData so that grouping logic uses live dimension config.
+  function loadDims() {
+    var res = ctx.makeResource('MultiRecordResource');
+    if (res.setResourceName) res.setResourceName('bsc_dimensions');
+    if (res.setDataSourceKey) res.setDataSourceKey('main');
+    if (res.setPageSize) res.setPageSize(20);
+    if (res.setSort) res.setSort([{ field: 'order', order: 'asc' }]);
+    return res.refresh().then(function () {
+      var raw = res.getData ? res.getData() : [];
+      var records = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
+      if (records.length > 0) {
+        DIMS = records.map(function (d) {
+          return {
+            value: d.name,   // must match kpi_catalog.bsc_dimension stored value
+            label: d.name,
+            color: d.color || '#d9d9d9',
+            icon:  d.icon  || '•',
+            code:  d.code,
+            order: d.order,
+          };
+        });
+      }
+      // Re-sync toggle state: add any new dims, remove stale ones
+      var dimValues = DIMS.map(function (d) { return d.value; });
+      state.dims = state.dims
+        .filter(function (v) { return dimValues.indexOf(v) !== -1; })
+        .concat(dimValues.filter(function (v) { return state.dims.indexOf(v) === -1; }));
+    }).catch(function () {
+      // Non-fatal: keep DIMS_FALLBACK already set
+    });
+  }
+
   // Data via the NocoBase resource API (required by RunJS authoring rules).
   function loadData() {
     var res = ctx.makeResource('MultiRecordResource');
@@ -412,7 +469,7 @@ try {
       render();
     });
   }
-  Promise.resolve().then(loadData).catch(function (err) {
+  Promise.resolve().then(loadDims).then(loadData).catch(function (err) {
     state.loading = false;
     state.error = (err && err.message) || 'unknown';
     render();
