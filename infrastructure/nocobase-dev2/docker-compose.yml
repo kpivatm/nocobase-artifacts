@@ -1,0 +1,43 @@
+services:
+  app:
+    image: nocobase/nocobase:latest
+    container_name: nocobase-dev2
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "${APP_PORT:-13001}:80"
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - DB_DIALECT=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-nocobase_dev2}
+      - DB_USER=${DB_USER:-nocobase}
+      - DB_PASSWORD=${DB_PASSWORD:-nocobase123}
+      - APP_KEY=${APP_KEY:-change-me-long-random-string}
+    volumes:
+      - nocobase-dev2-storage:/app/nocobase/storage
+    networks:
+      - nocobase-dev2-net
+
+  db:
+    image: postgres:16
+    container_name: nocobase-dev2-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_DATABASE:-nocobase_dev2}
+      - POSTGRES_USER=${DB_USER:-nocobase}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-nocobase123}
+    volumes:
+      - nocobase-dev2-db:/var/lib/postgresql/data
+    networks:
+      - nocobase-dev2-net
+
+volumes:
+  nocobase-dev2-storage:
+  nocobase-dev2-db:
+
+networks:
+  nocobase-dev2-net:
+    driver: bridge
