@@ -1,6 +1,6 @@
 services:
   app:
-    image: nocobase/nocobase:latest
+    image: nocobase/nocobase:alpha-full
     container_name: nocobase-dev2
     restart: unless-stopped
     depends_on:
