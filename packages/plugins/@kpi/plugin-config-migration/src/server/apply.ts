@@ -185,14 +185,15 @@ async function addNodeToExistingWorkflow(
   txOpt: Record<string, unknown>,
 ): Promise<{ status: 'ok' | 'skipped'; warning?: string }> {
   const flowNodesRepo = db.getRepository('flow_nodes');
-  const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey } });
+  // Include txOpt so reads see the current transaction state (uncommitted siblings)
+  const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey }, ...txOpt });
   if (wfRows.length === 0) {
     return { status: 'skipped', warning: `Parent workflow "${src.workflowKey}" not found` };
   }
   const wfId = (wfRows[0] as unknown as Record<string, unknown>).id as number;
 
   // Build key→id map from existing nodes in this workflow
-  const existingNodes = await flowNodesRepo.find({ filter: { workflowId: wfId } });
+  const existingNodes = await flowNodesRepo.find({ filter: { workflowId: wfId }, ...txOpt });
   const existingKeyToId = new Map<string, number>();
   for (const n of existingNodes) {
     const row = (n as unknown as Record<string, unknown>);
@@ -297,7 +298,7 @@ async function applyEntry(
   if (entry.action === 'delete') {
     if (entry.type === 'flow_node') {
       const tgt = entry.target as FlowNodeSnapshot;
-      const wfRows = await db.getRepository('workflows').find({ filter: { key: tgt.workflowKey } });
+      const wfRows = await db.getRepository('workflows').find({ filter: { key: tgt.workflowKey }, ...txOpt });
       const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
       if (wfId == null) return { status: 'skipped', warning: `Parent workflow "${tgt.workflowKey}" not found for delete` };
       await db.getRepository('flow_nodes').destroy({
@@ -356,7 +357,7 @@ async function applyEntry(
 
     if (entry.action === 'update' && rule === 'insert-or-update') {
       // Resolve workflowId to make filter globally unique (key alone is not guaranteed unique)
-      const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey } });
+      const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey }, ...txOpt });
       const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
       if (wfId == null) return { status: 'skipped', warning: `Parent workflow "${src.workflowKey}" not found` };
       await repo.update({
@@ -459,10 +460,8 @@ export async function applyBundle(
     backupInfo = await createBackup(app);
   }
 
-  if (versionWarning) {
-    resultEntries.push({ key: '__version_check__', action: 'check', status: 'skipped', warning: versionWarning });
-    skipped++;
-  }
+  const resultWarnings: string[] = [];
+  if (versionWarning) resultWarnings.push(versionWarning);
 
   const transaction = dryRun ? null : await db.sequelize.transaction();
 
@@ -495,5 +494,6 @@ export async function applyBundle(
 
   const result: ApplyResult = { applied, skipped, dryRun, entries: resultEntries };
   if (backupInfo !== undefined) result.backup = backupInfo;
+  if (resultWarnings.length > 0) result.warnings = resultWarnings;
   return result;
 }

@@ -164,3 +164,47 @@ describe('exportBundle — Stage 2: UI blueprints', () => {
     expect(bundle.desktopRoutes).toHaveLength(0);
   });
 });
+
+describe('exportBundle — Stage 3: secret redaction', () => {
+  it('redacts known sensitive keys from workflow config', async () => {
+    const db = makeMockDb({
+      workflows: [{ id: 1, key: 'wf-http', title: 'HTTP', type: 'manual', enabled: true,
+        config: { url: 'https://api.example.com', headers: { Authorization: 'Bearer SECRET_TOKEN', 'Content-Type': 'application/json' } } }],
+    });
+
+    const bundle = await exportBundle(db as unknown as import('@nocobase/database').Database);
+
+    const wf = bundle.workflows![0];
+    const headers = (wf.config?.headers as Record<string, unknown>);
+    expect(headers.Authorization).toBe('[REDACTED]');
+    expect(headers['Content-Type']).toBe('application/json'); // non-sensitive preserved
+    expect(bundle.hasRedactedFields).toBe(true);
+  });
+
+  it('redacts sensitive keys nested in flow_node config', async () => {
+    const db = makeMockDb({
+      workflows: [{ id: 1, key: 'wf-1', title: 'WF', type: 'manual', enabled: true, config: {} }],
+      flow_nodes: [{ id: 10, key: 'n1', workflowId: 1, type: 'request', upstreamId: null,
+        config: { method: 'POST', password: 'my_secret_pass', apiKey: 'ABCD1234' } }],
+    });
+
+    const bundle = await exportBundle(db as unknown as import('@nocobase/database').Database);
+
+    const node = bundle.workflows![0].nodes[0];
+    expect(node.config?.password).toBe('[REDACTED]');
+    expect(node.config?.apiKey).toBe('[REDACTED]');
+    expect(node.config?.method).toBe('POST'); // non-sensitive preserved
+    expect(bundle.hasRedactedFields).toBe(true);
+  });
+
+  it('does not set hasRedactedFields when no sensitive keys present', async () => {
+    const db = makeMockDb({
+      workflows: [{ id: 1, key: 'wf-safe', title: 'Safe', type: 'schedule', enabled: true,
+        config: { cron: '0 * * * *', timezone: 'UTC' } }],
+    });
+
+    const bundle = await exportBundle(db as unknown as import('@nocobase/database').Database);
+
+    expect(bundle.hasRedactedFields).toBeFalsy();
+  });
+});

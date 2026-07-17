@@ -49,6 +49,12 @@ export async function createBackup(app: NocoBaseApp): Promise<BackupInfo> {
     return { available: false };
   }
 
+  // NOTE: This calls the backupFiles:create action with a minimal context.
+  // The Backup Manager action must complete synchronously (or at least set ctx.body
+  // before returning) for this to work. If the plugin runs backup asynchronously
+  // and returns before the file is written, ctx.body will be null and we will throw.
+  // VERIFY on the target instance: applyBundle(backup=true) → check backup file exists
+  // and is non-empty → rollback restores correct state.
   const ctx: BackupCreateContext = { body: null, status: 200 };
 
   try {
@@ -60,7 +66,15 @@ export async function createBackup(app: NocoBaseApp): Promise<BackupInfo> {
         createdAt: ctx.body.createdAt ?? new Date().toISOString(),
       };
     }
-    return { available: true };
+    // Backup action returned without a filename. This happens when the plugin runs
+    // asynchronously or requires params.values that were not provided.
+    // Fail loudly: proceeding without a valid backup defeats the safety-net.
+    throw new Error(
+      'backupFiles:create returned without a filename. ' +
+      'The backup may be async or may require params.values. ' +
+      'Verify the Backup Manager plugin is synchronous on this instance, ' +
+      'or disable backup (backup=false) if this instance does not support it.',
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`Backup creation failed: ${message}`);

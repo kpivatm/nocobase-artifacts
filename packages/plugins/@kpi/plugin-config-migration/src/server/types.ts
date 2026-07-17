@@ -99,6 +99,8 @@ export interface Bundle {
   version: string;
   exportedAt: string;
   nocobaseVersion?: string; // Stage 3: version included for compatibility check
+  // Stage 3: set when any workflow/node config field was redacted on export
+  hasRedactedFields?: boolean;
   // Stage 1
   collections: CollectionSnapshot[];
   fields: FieldSnapshot[];
@@ -175,4 +177,5 @@ export interface ApplyResult {
   dryRun: boolean;
   entries: ApplyResultEntry[];
   backup?: BackupInfo; // Stage 3: backup info if backup was performed
+  warnings?: string[]; // non-entry-level warnings (e.g. version mismatch)
 }
