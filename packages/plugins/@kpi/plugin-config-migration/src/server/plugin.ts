@@ -4,7 +4,7 @@ import { diffBundles } from './diff';
 import { applyBundle } from './apply';
 
 const PLUGIN_NAME = 'plugin-config-migration';
-const PLUGIN_VERSION = '0.1.0';
+const PLUGIN_VERSION = '0.2.0';
 
 export class PluginConfigMigrationServer extends Plugin {
   async load() {

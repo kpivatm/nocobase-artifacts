@@ -1,3 +1,5 @@
+// ─── Stage 1: Collections & Fields ───────────────────────────────────────────
+
 export interface FieldSnapshot {
   collectionName: string;
   name: string;
@@ -7,9 +9,9 @@ export interface FieldSnapshot {
   primaryKey?: boolean;
   allowNull?: boolean;
   unique?: boolean;
-  defaultValue?: any;
-  uiSchema?: Record<string, any>;
-  [key: string]: any;
+  defaultValue?: unknown;
+  uiSchema?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface CollectionSnapshot {
@@ -17,27 +19,122 @@ export interface CollectionSnapshot {
   title?: string;
   description?: string | null;
   hidden?: boolean;
-  [key: string]: any;
 }
+
+// ─── Stage 2: Workflows ───────────────────────────────────────────────────────
+
+export interface FlowNodeSnapshot {
+  key: string;
+  workflowKey: string;
+  type: string;
+  title?: string | null;
+  config?: Record<string, unknown>;
+  branchIndex?: number | null;
+  upstreamKey?: string | null; // natural-key ref to upstream node (null = root)
+}
+
+export interface WorkflowSnapshot {
+  key: string;
+  title: string;
+  type: string;
+  triggerType?: string;
+  config?: Record<string, unknown>;
+  enabled: boolean;
+  description?: string | null;
+  nodes: FlowNodeSnapshot[];
+}
+
+// ─── Stage 2: ACL ─────────────────────────────────────────────────────────────
+
+export interface RoleResourceActionSnapshot {
+  name: string;
+  fields?: string[];
+}
+
+export interface RoleResourceSnapshot {
+  roleName: string;
+  name: string; // resource / collection name
+  usingActionsConfig?: boolean;
+  actions?: RoleResourceActionSnapshot[];
+}
+
+export interface RoleSnapshot {
+  name: string;
+  title?: string;
+  description?: string | null;
+  strategy?: Record<string, unknown> | null;
+  default?: boolean;
+  allowConfigure?: boolean;
+}
+
+// ─── Stage 2: UI Blueprints ───────────────────────────────────────────────────
+
+// NOTE: x-uid values are generated per-instance. Applying across a fresh
+// installation will treat non-matching x-uid values as new additions.
+// This is expected behaviour for the same running instance migrated across
+// environments; cross-instance schema merging requires a separate uid-map step.
+export interface UISchemaSnapshot {
+  'x-uid': string;
+  name?: string;
+  schema?: Record<string, unknown>;
+  serverHooks?: unknown[];
+}
+
+export interface DesktopRouteSnapshot {
+  uid: string; // stable natural key (string uid, not auto-increment rowid)
+  title?: string;
+  type?: string;
+  icon?: string | null;
+  menuSchemaUid?: string | null;
+  schemaUid?: string | null;
+  parentUid?: string | null;
+  sort?: number;
+  path?: string | null;
+  [key: string]: unknown;
+}
+
+// ─── Bundle (all domains) ─────────────────────────────────────────────────────
 
 export interface Bundle {
   version: string;
   exportedAt: string;
+  // Stage 1
   collections: CollectionSnapshot[];
   fields: FieldSnapshot[];
+  // Stage 2 (optional so bundles from Stage 1 remain valid)
+  workflows?: WorkflowSnapshot[];
+  roles?: RoleSnapshot[];
+  rolesResources?: RoleResourceSnapshot[];
+  uiSchemas?: UISchemaSnapshot[];
+  desktopRoutes?: DesktopRouteSnapshot[];
 }
+
+// ─── Diff ─────────────────────────────────────────────────────────────────────
+
+export type DiffEntryType =
+  | 'collection'
+  | 'field'
+  | 'workflow'
+  | 'flow_node'
+  | 'role'
+  | 'roles_resource'
+  | 'ui_schema'
+  | 'desktop_route';
 
 export interface DiffEntry {
   action: 'add' | 'update' | 'delete';
-  type: 'collection' | 'field';
+  type: DiffEntryType;
   key: string;
-  source?: any;
-  target?: any;
+  source?: unknown;
+  target?: unknown;
+  warnings?: string[];
 }
 
 export interface DiffResult {
   entries: DiffEntry[];
 }
+
+// ─── Migration config ─────────────────────────────────────────────────────────
 
 export type MigrationRule = 'insert' | 'insert-or-update' | 'skip';
 
@@ -46,9 +143,19 @@ export interface MigrationConfig {
   defaultRule?: MigrationRule;
 }
 
+// ─── Apply ────────────────────────────────────────────────────────────────────
+
+export interface ApplyResultEntry {
+  key: string;
+  action: string;
+  status: 'ok' | 'skipped' | 'error';
+  error?: string;
+  warning?: string;
+}
+
 export interface ApplyResult {
   applied: number;
   skipped: number;
   dryRun: boolean;
-  entries: Array<{ key: string; action: string; status: 'ok' | 'skipped' | 'error'; error?: string }>;
+  entries: ApplyResultEntry[];
 }
