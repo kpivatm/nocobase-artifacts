@@ -152,6 +152,27 @@ describe('applyBundle — Stage 1: collections & fields', () => {
     expect(commitFn).toHaveBeenCalled();
   });
 
+  it('rule=skip on collection also skips all fields of that collection', async () => {
+    // Regression guard: Stage 2 regressed domainKeyFromEntry to return full key (e.g. "orders.title")
+    // instead of parent collection name, so field entries never matched a collection-level rule.
+    const { db, createFn, commitFn } = makeMockDb();
+
+    const source = makeBundle({
+      collections: [{ name: 'orders', title: 'Orders' }],
+      fields: [
+        { collectionName: 'orders', name: 'title', type: 'string' },
+        { collectionName: 'orders', name: 'amount', type: 'integer' },
+      ],
+    });
+
+    const result = await applyBundle(db, source, { rules: { orders: 'skip' } }, false);
+
+    expect(createFn).not.toHaveBeenCalled();
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(3); // collection + 2 fields
+    expect(commitFn).toHaveBeenCalled();
+  });
+
   it('is idempotent: applying same diff twice gives same final state', async () => {
     const col = { name: 'posts', title: 'Posts' };
     const { db, createFn } = makeMockDb({ collectionsFind: [col] });
@@ -237,6 +258,58 @@ describe('applyBundle — workflows', () => {
     expect(wfEntry?.status).toBe('skipped');
     expect(createFn).not.toHaveBeenCalled();
   });
+
+  it('rule=skip on workflow also skips its flow_node entries', async () => {
+    // flow_node key = "workflowKey.nodeKey" — parent rule must propagate via parentDomainKey
+    const { db, createFn } = makeMockDb({ workflowsFind: [] });
+
+    const source = makeBundle({
+      workflows: [{
+        key: 'wf-internal',
+        title: 'Internal',
+        type: 'schedule',
+        enabled: false,
+        nodes: [
+          { key: 'n1', workflowKey: 'wf-internal', type: 'notification', upstreamKey: null },
+        ],
+      }],
+    });
+
+    const result = await applyBundle(db, source, { rules: { 'wf-internal': 'skip' } }, false);
+
+    expect(createFn).not.toHaveBeenCalled();
+    const wfEntry = result.entries.find((e) => e.key === 'wf-internal');
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-internal.n1');
+    expect(wfEntry?.status).toBe('skipped');
+    expect(nodeEntry?.status).toBe('skipped');
+  });
+
+  it('flow_node add to existing workflow is skipped with warning (orphan guard)', async () => {
+    // Workflow already exists in target; a new node appears as individual flow_node diff entry.
+    // Adding with upstreamId=null would create an orphan — must skip until Stage 3.
+    const existingWf = { id: 10, key: 'wf-existing', title: 'Existing', type: 'schedule', enabled: true };
+    const { db, createFn } = makeMockDb({ workflowsFind: [existingWf], flowNodesFind: [] });
+
+    const source = makeBundle({
+      workflows: [{
+        key: 'wf-existing',
+        title: 'Existing',
+        type: 'schedule',
+        enabled: true,
+        nodes: [
+          { key: 'new-node', workflowKey: 'wf-existing', type: 'notification', upstreamKey: null },
+        ],
+      }],
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    // The workflow itself is not new (no diff), but the node is → appears as flow_node add
+    expect(createFn).not.toHaveBeenCalled();
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-existing.new-node');
+    expect(nodeEntry?.status).toBe('skipped');
+    expect(nodeEntry?.warning).toMatch(/full graph context|Stage 3/i);
+  });
 });
 
 // ─── Stage 2: ACL ─────────────────────────────────────────────────────────────
@@ -277,7 +350,7 @@ describe('applyBundle — ACL', () => {
 // ─── Stage 2: UI blueprints ───────────────────────────────────────────────────
 
 describe('applyBundle — UI blueprints', () => {
-  it('applies added ui schema', async () => {
+  it('ui_schema apply is deferred to Stage 3 (export/diff-only in Stage 2)', async () => {
     const { db, createFn } = makeMockDb({ uiSchemasFind: [] });
 
     const source = makeBundle({
@@ -286,9 +359,11 @@ describe('applyBundle — UI blueprints', () => {
 
     const result = await applyBundle(db, source, {}, false);
 
-    expect(createFn).toHaveBeenCalled();
+    // generic repo.create() does not rebuild uiSchemaTreePath — apply is skipped until Stage 3
+    expect(createFn).not.toHaveBeenCalled();
     const entry = result.entries.find((e) => e.key === 'uid-abc');
-    expect(entry?.status).toBe('ok');
+    expect(entry?.status).toBe('skipped');
+    expect(entry?.warning).toMatch(/UiSchemaRepository|Stage 3/i);
   });
 
   it('applies added desktop route', async () => {
