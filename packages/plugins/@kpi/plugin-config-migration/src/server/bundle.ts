@@ -231,6 +231,18 @@ async function exportUIBlueprints(db: Database): Promise<{
   };
 }
 
+// ─── Stage 3: NocoBase version detection ─────────────────────────────────────
+
+function detectNocobaseVersion(): string | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pkg = require('@nocobase/server/package.json') as { version?: string };
+    return pkg.version;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export async function exportBundle(db: Database): Promise<Bundle> {
@@ -257,7 +269,7 @@ export async function exportBundle(db: Database): Promise<Bundle> {
     exportUIBlueprints(db),
   ]);
 
-  return {
+  const bundle: Bundle = {
     version: PLUGIN_VERSION,
     exportedAt: new Date().toISOString(),
     collections,
@@ -268,4 +280,9 @@ export async function exportBundle(db: Database): Promise<Bundle> {
     uiSchemas,
     desktopRoutes,
   };
+
+  const nocobaseVersion = detectNocobaseVersion();
+  if (nocobaseVersion) bundle.nocobaseVersion = nocobaseVersion;
+
+  return bundle;
 }

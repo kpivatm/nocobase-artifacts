@@ -98,6 +98,7 @@ export interface DesktopRouteSnapshot {
 export interface Bundle {
   version: string;
   exportedAt: string;
+  nocobaseVersion?: string; // Stage 3: version included for compatibility check
   // Stage 1
   collections: CollectionSnapshot[];
   fields: FieldSnapshot[];
@@ -107,6 +108,21 @@ export interface Bundle {
   rolesResources?: RoleResourceSnapshot[];
   uiSchemas?: UISchemaSnapshot[];
   desktopRoutes?: DesktopRouteSnapshot[];
+}
+
+// ─── Stage 3: Backup / Rollback ──────────────────────────────────────────────
+
+export interface BackupInfo {
+  available: boolean;
+  filename?: string;
+  createdAt?: string;
+}
+
+export interface RollbackResult {
+  success: boolean;
+  filename: string;
+  restoredAt: string;
+  error?: string;
 }
 
 // ─── Diff ─────────────────────────────────────────────────────────────────────
@@ -158,4 +174,5 @@ export interface ApplyResult {
   skipped: number;
   dryRun: boolean;
   entries: ApplyResultEntry[];
+  backup?: BackupInfo; // Stage 3: backup info if backup was performed
 }

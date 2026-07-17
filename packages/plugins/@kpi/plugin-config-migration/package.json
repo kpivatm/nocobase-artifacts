@@ -1,10 +1,14 @@
 {
   "name": "@kpi/plugin-config-migration",
-  "version": "0.2.0",
-  "description": "NocoBase plugin for config migration — collections/fields export, diff, and apply with a Settings UI",
+  "version": "0.3.0",
+  "description": "NocoBase plugin for config migration — backup/rollback, CLI, uiSchemas apply, full workflow-graph apply (Stage 3)",
   "license": "MIT",
   "main": "./lib/server/index.js",
+  "bin": {
+    "config-migration": "./bin/config-migration.js"
+  },
   "files": [
+    "bin",
     "lib",
     "src"
   ],

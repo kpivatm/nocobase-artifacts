@@ -2,14 +2,17 @@ import type { Database } from '@nocobase/database';
 import type { Transaction } from 'sequelize';
 import { diffBundles } from './diff';
 import { exportBundle } from './bundle';
+import { createBackup } from './backup';
 import type {
   ApplyResult,
   ApplyResultEntry,
+  BackupInfo,
   Bundle,
   DiffEntry,
   FlowNodeSnapshot,
   MigrationConfig,
   MigrationRule,
+  UISchemaSnapshot,
   WorkflowSnapshot,
 } from './types';
 
@@ -103,9 +106,10 @@ async function applyWorkflowNodes(
   workflowId: number,
   nodes: FlowNodeSnapshot[],
   txOpt: Record<string, unknown>,
+  existingKeyToId: Map<string, number> = new Map(),
 ): Promise<void> {
   const flowNodesRepo = db.getRepository('flow_nodes');
-  const keyToNewId = new Map<string, number>();
+  const keyToNewId = new Map<string, number>(existingKeyToId);
 
   // nodes are already in topo order from export (roots first)
   for (const node of nodes) {
@@ -171,6 +175,102 @@ async function applyWorkflowUpdate(
   });
 }
 
+// ─── Stage 3: full workflow-graph node add ────────────────────────────────────
+// Add a node to an existing workflow by first loading the existing graph
+// so that upstreamKey → upstreamId can be resolved correctly.
+
+async function addNodeToExistingWorkflow(
+  db: Database,
+  src: FlowNodeSnapshot,
+  txOpt: Record<string, unknown>,
+): Promise<{ status: 'ok' | 'skipped'; warning?: string }> {
+  const flowNodesRepo = db.getRepository('flow_nodes');
+  const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey } });
+  if (wfRows.length === 0) {
+    return { status: 'skipped', warning: `Parent workflow "${src.workflowKey}" not found` };
+  }
+  const wfId = (wfRows[0] as unknown as Record<string, unknown>).id as number;
+
+  // Build key→id map from existing nodes in this workflow
+  const existingNodes = await flowNodesRepo.find({ filter: { workflowId: wfId } });
+  const existingKeyToId = new Map<string, number>();
+  for (const n of existingNodes) {
+    const row = (n as unknown as Record<string, unknown>);
+    if (row.key != null && row.id != null) {
+      existingKeyToId.set(row.key as string, row.id as number);
+    }
+  }
+
+  const upstreamId = src.upstreamKey != null ? (existingKeyToId.get(src.upstreamKey) ?? null) : null;
+  const created = await flowNodesRepo.create({
+    values: {
+      key: src.key,
+      workflowId: wfId,
+      type: src.type,
+      title: src.title ?? null,
+      config: src.config ?? {},
+      branchIndex: src.branchIndex ?? null,
+      upstreamId,
+    },
+    ...txOpt,
+  });
+  existingKeyToId.set(src.key, (created as Record<string, unknown>).id as number);
+  return { status: 'ok' };
+}
+
+// ─── Stage 3: UiSchema apply via UiSchemaRepository ──────────────────────────
+
+interface UiSchemaRepository {
+  insert(data: Record<string, unknown>, options?: Record<string, unknown>): Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  update(opts: Record<string, unknown>): Promise<unknown>;
+}
+
+async function applyUISchema(
+  db: Database,
+  entry: DiffEntry,
+  rule: MigrationRule,
+  txOpt: Record<string, unknown>,
+): Promise<{ status: 'ok' | 'skipped'; warning?: string }> {
+  const src = entry.source as UISchemaSnapshot;
+
+  // UiSchemaRepository rebuilds the uiSchemaTreePath table on insert.
+  // Plain repo.create() does not, which causes schemas to fail rendering.
+  let repo: UiSchemaRepository;
+  try {
+    repo = db.getRepository('uiSchemas') as unknown as UiSchemaRepository;
+    if (typeof repo.insert !== 'function') {
+      throw new Error('not a UiSchemaRepository');
+    }
+  } catch {
+    return {
+      status: 'skipped',
+      warning: `ui_schema "${src['x-uid']}" skipped: UiSchemaRepository not available (plugin-ui-schema-storage may not be loaded)`,
+    };
+  }
+
+  if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
+    const schemaData: Record<string, unknown> = {
+      'x-uid': src['x-uid'],
+      name: src.name,
+      ...(src.schema ?? {}),
+    };
+    await repo.insert(schemaData, txOpt);
+    return { status: 'ok' };
+  }
+
+  if (entry.action === 'update' && rule === 'insert-or-update') {
+    await repo.update({
+      filter: { 'x-uid': src['x-uid'] },
+      values: { schema: src.schema ?? {} },
+      ...txOpt,
+    });
+    return { status: 'ok' };
+  }
+
+  return { status: 'skipped' };
+}
+
 // ─── Per-entry apply ──────────────────────────────────────────────────────────
 
 async function applyEntry(
@@ -193,8 +293,20 @@ async function applyEntry(
     };
   }
 
+  // Stage 3: support deletions for flow_nodes (reverse topo order handled by orderEntries)
   if (entry.action === 'delete') {
-    // Deletions are skipped by default to avoid data loss
+    if (entry.type === 'flow_node') {
+      const tgt = entry.target as FlowNodeSnapshot;
+      const wfRows = await db.getRepository('workflows').find({ filter: { key: tgt.workflowKey } });
+      const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
+      if (wfId == null) return { status: 'skipped', warning: `Parent workflow "${tgt.workflowKey}" not found for delete` };
+      await db.getRepository('flow_nodes').destroy({
+        filter: { key: tgt.key, workflowId: wfId },
+        ...txOpt,
+      });
+      return { status: 'ok' };
+    }
+    // All other delete types skipped to avoid accidental data loss
     return { status: 'skipped' };
   }
 
@@ -234,19 +346,15 @@ async function applyEntry(
   }
 
   if (entry.type === 'flow_node') {
-    // Individual flow_node entries represent nodes added/updated in existing workflows.
-    // New workflows carry their own nodes via applyWorkflowAdd → applyWorkflowNodes.
     const src = entry.source as FlowNodeSnapshot;
     const repo = db.getRepository('flow_nodes');
+
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
-      // Adding a node to an existing workflow requires the full graph context to resolve
-      // upstreamId correctly. Creating with upstreamId=null produces an orphan node.
-      // Deferred to Stage 3 (workflow diff + full graph rebuild); skip to avoid data corruption.
-      return {
-        status: 'skipped',
-        warning: `flow_node "${src.key}" in "${src.workflowKey}" skipped: adding nodes to existing workflows requires full graph context (Stage 3)`,
-      };
-    } else if (entry.action === 'update' && rule === 'insert-or-update') {
+      // Stage 3: add node to existing workflow with full graph context
+      return addNodeToExistingWorkflow(db, src, txOpt);
+    }
+
+    if (entry.action === 'update' && rule === 'insert-or-update') {
       // Resolve workflowId to make filter globally unique (key alone is not guaranteed unique)
       const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey } });
       const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
@@ -292,14 +400,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'ui_schema') {
-    // uiSchemas use UiSchemaRepository (insert/insertAdjacent) which rebuilds the
-    // uiSchemaTreePath table. Generic repo.create() does not build the tree, so
-    // round-trip apply would produce schemas that fail to render in the UI.
-    // Apply is deferred to Stage 3; export and diff are fully supported.
-    return {
-      status: 'skipped',
-      warning: `ui_schema "${entry.key}" apply deferred to Stage 3 (requires UiSchemaRepository for tree-path rebuild)`,
-    };
+    return applyUISchema(db, entry, rule, txOpt);
   }
 
   if (entry.type === 'desktop_route') {
@@ -316,21 +417,52 @@ async function applyEntry(
   return { status: 'skipped' };
 }
 
+// ─── Version compatibility check ─────────────────────────────────────────────
+
+function checkVersionCompat(source: Bundle, targetNocobaseVersion: string | undefined): string | null {
+  if (!source.nocobaseVersion || !targetNocobaseVersion) return null;
+  const srcMajor = parseInt(source.nocobaseVersion.split('.')[0], 10);
+  const tgtMajor = parseInt(targetNocobaseVersion.split('.')[0], 10);
+  if (!isNaN(srcMajor) && !isNaN(tgtMajor) && srcMajor !== tgtMajor) {
+    return `Version mismatch: bundle exported from NocoBase ${source.nocobaseVersion}, target is ${targetNocobaseVersion}. Major version difference may cause schema incompatibility.`;
+  }
+  return null;
+}
+
 // ─── Main apply ───────────────────────────────────────────────────────────────
+
+// App type used only for backup; loosely typed to avoid hard dependency.
+type NocoBaseApp = Parameters<typeof createBackup>[0];
 
 export async function applyBundle(
   db: Database,
   source: Bundle,
   config: MigrationConfig = {},
   dryRun = false,
+  app?: NocoBaseApp,
 ): Promise<ApplyResult> {
   const target = await exportBundle(db);
+
+  // Stage 3: version compatibility warning (non-blocking)
+  const versionWarning = checkVersionCompat(source, target.nocobaseVersion);
+
   const { entries } = diffBundles(source, target);
   const ordered = orderEntries(entries);
 
   const resultEntries: ApplyResultEntry[] = [];
   let applied = 0;
   let skipped = 0;
+
+  // Stage 3: backup-before-apply
+  let backupInfo: BackupInfo | undefined;
+  if (!dryRun && app) {
+    backupInfo = await createBackup(app);
+  }
+
+  if (versionWarning) {
+    resultEntries.push({ key: '__version_check__', action: 'check', status: 'skipped', warning: versionWarning });
+    skipped++;
+  }
 
   const transaction = dryRun ? null : await db.sequelize.transaction();
 
@@ -361,5 +493,7 @@ export async function applyBundle(
     throw err;
   }
 
-  return { applied, skipped, dryRun, entries: resultEntries };
+  const result: ApplyResult = { applied, skipped, dryRun, entries: resultEntries };
+  if (backupInfo !== undefined) result.backup = backupInfo;
+  return result;
 }
