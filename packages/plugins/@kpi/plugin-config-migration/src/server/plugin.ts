@@ -59,9 +59,10 @@ export class PluginConfigMigrationServer extends Plugin {
     });
 
     this.app.acl.allow(PLUGIN_NAME, 'status', 'loggedIn');
-    this.app.acl.allow(PLUGIN_NAME, 'export', 'loggedIn');
     this.app.acl.allow(PLUGIN_NAME, 'diff', 'loggedIn');
-    this.app.acl.allow(PLUGIN_NAME, 'apply', 'loggedIn');
+    // export dumps full schema; apply performs DDL-level writes — both are admin-only
+    this.app.acl.allow(PLUGIN_NAME, 'export', 'admin');
+    this.app.acl.allow(PLUGIN_NAME, 'apply', 'admin');
   }
 }
 

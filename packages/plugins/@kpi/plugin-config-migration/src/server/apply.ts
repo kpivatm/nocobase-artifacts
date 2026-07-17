@@ -1,4 +1,5 @@
 import type { Database } from '@nocobase/database';
+import type { Transaction } from 'sequelize';
 import { diffBundles } from './diff';
 import { exportBundle } from './bundle';
 import type { ApplyResult, Bundle, DiffEntry, MigrationConfig, MigrationRule } from './types';
@@ -27,7 +28,8 @@ async function applyEntry(
   entry: DiffEntry,
   rule: MigrationRule,
   dryRun: boolean,
-): Promise<{ status: 'ok' | 'skipped'; error?: undefined }> {
+  transaction: Transaction | null,
+): Promise<{ status: 'ok' | 'skipped' }> {
   if (rule === 'skip') {
     return { status: 'skipped' };
   }
@@ -38,28 +40,27 @@ async function applyEntry(
 
   const repoName = entry.type === 'collection' ? 'collections' : 'fields';
   const repo = db.getRepository(repoName);
+  const txOpt = transaction ? { transaction } : {};
 
   if (entry.action === 'add') {
     if (rule === 'insert' || rule === 'insert-or-update') {
-      await repo.create({ values: entry.source });
+      await repo.create({ values: entry.source, ...txOpt });
     }
   } else if (entry.action === 'update') {
     if (rule === 'insert-or-update') {
-      const filterKey = entry.type === 'collection' ? 'name' : { collectionName: entry.source.collectionName, name: entry.source.name };
       if (entry.type === 'collection') {
-        await repo.update({ filter: { name: entry.source.name }, values: entry.source });
+        await repo.update({ filter: { name: entry.source.name }, values: entry.source, ...txOpt });
       } else {
         await repo.update({
           filter: { collectionName: entry.source.collectionName, name: entry.source.name },
           values: entry.source,
+          ...txOpt,
         });
       }
     }
   } else if (entry.action === 'delete') {
-    // deletions are skipped by default to avoid data loss; caller can override with rule
-    if (rule === 'insert-or-update') {
-      // conservative: don't delete by default
-    }
+    // deletions skipped by default to avoid data loss; implement in Stage 2+
+    return { status: 'skipped' };
   }
 
   return { status: 'ok' };
@@ -87,8 +88,7 @@ export async function applyBundle(
       const rule = getRule(config, colName);
 
       try {
-        // Pass transaction via db context when not dryRun
-        const { status } = await applyEntry(db, entry, rule, dryRun);
+        const { status } = await applyEntry(db, entry, rule, dryRun, transaction);
         resultEntries.push({ key: entry.key, action: entry.action, status });
         if (status === 'ok') applied++;
         else skipped++;
