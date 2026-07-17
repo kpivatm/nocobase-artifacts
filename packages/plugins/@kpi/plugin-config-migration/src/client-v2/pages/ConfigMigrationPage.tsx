@@ -71,6 +71,7 @@ interface ApplyResult {
   skipped: number;
   dryRun: boolean;
   entries: ApplyResultEntry[];
+  backup?: { filename: string };
 }
 
 interface Bundle {
@@ -257,6 +258,8 @@ export default function ConfigMigrationPage() {
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
 
+  const [backupFilename, setBackupFilename] = useState<string | null>(null);
+
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [rollbackResult, setRollbackResult] = useState<unknown>(null);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
@@ -276,6 +279,7 @@ export default function ConfigMigrationPage() {
         setUploadError(null);
         setDiffResult(null);
         setApplyResult(null);
+        setBackupFilename(null);
         setRollbackResult(null);
         setEntryRules({});
       } catch (err: unknown) {
@@ -347,6 +351,9 @@ export default function ConfigMigrationPage() {
             });
             const result: ApplyResult = resp?.data?.data ?? resp?.data;
             setApplyResult(result);
+            if (!dryRun && result.backup?.filename) {
+              setBackupFilename(result.backup.filename);
+            }
             if (dryRun) {
               message.info(t('Dry run complete: {{applied}} would be applied, {{skipped}} would be skipped', {
                 applied: result.applied,
@@ -389,9 +396,11 @@ export default function ConfigMigrationPage() {
           const resp = await ctx.api.request({
             url: 'plugin-config-migration:rollback',
             method: 'post',
+            data: { filename: backupFilename },
           });
           const result = resp?.data?.data ?? resp?.data;
           setRollbackResult(result);
+          setBackupFilename(null);
           message.success(t('Rollback complete'));
         } catch (err: unknown) {
           const msg = (err as Error).message ?? 'Rollback failed';
@@ -402,7 +411,7 @@ export default function ConfigMigrationPage() {
         }
       },
     });
-  }, [ctx.api, t]);
+  }, [ctx.api, backupFilename, t]);
 
   // ── Diff tab items ──────────────────────────────────────────────────────────
 
@@ -589,6 +598,8 @@ export default function ConfigMigrationPage() {
                   loading={rollbackLoading}
                   onClick={handleRollback}
                   icon={<SyncOutlined />}
+                  disabled={!backupFilename}
+                  title={backupFilename ? undefined : t('Apply a bundle first to create a rollback backup')}
                 >
                   {t('Rollback')}
                 </Button>
@@ -624,6 +635,20 @@ export default function ConfigMigrationPage() {
           }
           style={{ marginBottom: 16 }}
         >
+          {backupFilename && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={
+                <Space>
+                  <Text>{t('Backup created before apply:')}</Text>
+                  <Text code>{backupFilename}</Text>
+                  <Text type="secondary">{t('Use Rollback to restore if needed.')}</Text>
+                </Space>
+              }
+            />
+          )}
           <ApplyResultsTable result={applyResult} />
         </Card>
       )}
