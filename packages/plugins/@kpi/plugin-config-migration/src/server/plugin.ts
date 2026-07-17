@@ -2,12 +2,16 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
+import { restoreBackup } from './backup';
 
 const PLUGIN_NAME = 'plugin-config-migration';
-const PLUGIN_VERSION = '0.2.0';
+const PLUGIN_VERSION = '0.3.0';
 
 export class PluginConfigMigrationServer extends Plugin {
   async load() {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const plugin = this;
+
     this.app.resourceManager.define({
       name: PLUGIN_NAME,
       actions: {
@@ -43,15 +47,33 @@ export class PluginConfigMigrationServer extends Plugin {
         },
 
         // POST /api/plugin-config-migration:apply
+        // Body: { source: Bundle, dryRun?: boolean, migrationConfig?: MigrationConfig, backup?: boolean }
+        // Response includes backup.filename when backup=true and Backup Manager is available.
         apply: async (ctx, next) => {
-          const { source, dryRun, migrationConfig } = ctx.action.params.values ?? {};
+          const { source, dryRun, migrationConfig, backup } = ctx.action.params.values ?? {};
           if (!source) {
             ctx.status = 400;
             ctx.body = { error: 'source bundle is required.' };
             await next();
             return;
           }
-          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false);
+          const app = backup !== false ? plugin.app : undefined;
+          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, app);
+          ctx.body = result;
+          await next();
+        },
+
+        // POST /api/plugin-config-migration:rollback
+        // Body: { filename: string } — filename from a prior apply response's backup.filename
+        rollback: async (ctx, next) => {
+          const { filename } = ctx.action.params.values ?? {};
+          if (!filename) {
+            ctx.status = 400;
+            ctx.body = { error: 'filename is required (from a prior apply backup.filename).' };
+            await next();
+            return;
+          }
+          const result = await restoreBackup(plugin.app, filename);
           ctx.body = result;
           await next();
         },
@@ -60,11 +82,14 @@ export class PluginConfigMigrationServer extends Plugin {
 
     this.app.acl.allow(PLUGIN_NAME, 'status', 'loggedIn');
     this.app.acl.allow(PLUGIN_NAME, 'diff', 'loggedIn');
-    // export dumps full schema; apply performs DDL-level writes — admin role via snippet
-    // 'admin' is not a registered ACL condition; use registerSnippet so admin role (pm.*) covers these
+    // export, apply, rollback — DDL-level operations, admin only
     this.app.acl.registerSnippet({
       name: `pm.${PLUGIN_NAME}`,
-      actions: [`${PLUGIN_NAME}:export`, `${PLUGIN_NAME}:apply`],
+      actions: [
+        `${PLUGIN_NAME}:export`,
+        `${PLUGIN_NAME}:apply`,
+        `${PLUGIN_NAME}:rollback`,
+      ],
     });
   }
 }

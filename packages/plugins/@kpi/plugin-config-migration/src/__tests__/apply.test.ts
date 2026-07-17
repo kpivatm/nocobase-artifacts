@@ -22,20 +22,37 @@ function makeMockDb(overrides: {
   desktopRoutesFind?: unknown[];
   createFn?: jest.Mock;
   updateFn?: jest.Mock;
+  destroyFn?: jest.Mock;
   rollbackFn?: jest.Mock;
   commitFn?: jest.Mock;
   txObject?: Record<string, jest.Mock>;
+  uiSchemaInsertFn?: jest.Mock; // Stage 3: UiSchemaRepository.insert()
 } = {}) {
   const rollbackFn = overrides.rollbackFn ?? jest.fn();
   const commitFn = overrides.commitFn ?? jest.fn();
   const createFn = overrides.createFn ?? jest.fn().mockResolvedValue({ id: 1 });
   const updateFn = overrides.updateFn ?? jest.fn().mockResolvedValue({});
+  const destroyFn = overrides.destroyFn ?? jest.fn().mockResolvedValue({});
   const txObject = overrides.txObject ?? { commit: commitFn, rollback: rollbackFn };
 
+  // Mimic Sequelize model instances: spread properties so row.id works directly,
+  // and also expose toJSON() so code that calls toJSON() gets the same data.
+  const wrapRow = (r: unknown) => ({ ...(r as object), toJSON: () => r });
+
   const makeRepo = (rows: unknown[] = []) => ({
-    find: jest.fn().mockResolvedValue(rows.map((r) => ({ toJSON: () => r }))),
+    find: jest.fn().mockResolvedValue(rows.map(wrapRow)),
     create: createFn,
     update: updateFn,
+    destroy: destroyFn,
+  });
+
+  // Stage 3: UiSchemaRepository with .insert() support
+  const makeUiSchemaRepo = (rows: unknown[] = []) => ({
+    find: jest.fn().mockResolvedValue(rows.map(wrapRow)),
+    create: createFn,
+    update: updateFn,
+    destroy: destroyFn,
+    ...(overrides.uiSchemaInsertFn ? { insert: overrides.uiSchemaInsertFn } : {}),
   });
 
   const repoMap: Record<string, unknown[]> = {
@@ -54,12 +71,16 @@ function makeMockDb(overrides: {
     commitFn,
     createFn,
     updateFn,
+    destroyFn,
     txObject,
     db: {
       sequelize: {
         transaction: jest.fn().mockResolvedValue(txObject),
       },
-      getRepository: jest.fn((name: string) => makeRepo(repoMap[name] ?? [])),
+      getRepository: jest.fn((name: string) => {
+        if (name === 'uiSchemas') return makeUiSchemaRepo(repoMap[name] ?? []);
+        return makeRepo(repoMap[name] ?? []);
+      }),
     } as unknown as import('@nocobase/database').Database,
   };
 }
@@ -284,11 +305,11 @@ describe('applyBundle — workflows', () => {
     expect(nodeEntry?.status).toBe('skipped');
   });
 
-  it('flow_node add to existing workflow is skipped with warning (orphan guard)', async () => {
-    // Workflow already exists in target; a new node appears as individual flow_node diff entry.
-    // Adding with upstreamId=null would create an orphan — must skip until Stage 3.
+  it('Stage 3: flow_node add to existing workflow uses full graph context (resolved)', async () => {
+    // Stage 3 implements adding nodes to existing workflows by loading existing graph
+    // to resolve upstreamKey → upstreamId correctly.
     const existingWf = { id: 10, key: 'wf-existing', title: 'Existing', type: 'schedule', enabled: true };
-    const { db, createFn } = makeMockDb({ workflowsFind: [existingWf], flowNodesFind: [] });
+    const { db, createFn, commitFn } = makeMockDb({ workflowsFind: [existingWf], flowNodesFind: [] });
 
     const source = makeBundle({
       workflows: [{
@@ -304,11 +325,11 @@ describe('applyBundle — workflows', () => {
 
     const result = await applyBundle(db, source, {}, false);
 
-    // The workflow itself is not new (no diff), but the node is → appears as flow_node add
-    expect(createFn).not.toHaveBeenCalled();
+    // Stage 3: node add should succeed (not skipped)
     const nodeEntry = result.entries.find((e) => e.key === 'wf-existing.new-node');
-    expect(nodeEntry?.status).toBe('skipped');
-    expect(nodeEntry?.warning).toMatch(/full graph context|Stage 3/i);
+    expect(nodeEntry?.status).toBe('ok');
+    expect(createFn).toHaveBeenCalled(); // node was created
+    expect(commitFn).toHaveBeenCalled();
   });
 });
 
@@ -347,11 +368,14 @@ describe('applyBundle — ACL', () => {
   });
 });
 
-// ─── Stage 2: UI blueprints ───────────────────────────────────────────────────
+// ─── Stage 2 / Stage 3: UI blueprints ────────────────────────────────────────
 
 describe('applyBundle — UI blueprints', () => {
-  it('ui_schema apply is deferred to Stage 3 (export/diff-only in Stage 2)', async () => {
+  it('ui_schema apply falls back to skipped when repo lacks insert() (plugin not loaded)', async () => {
+    // When the UiSchemaRepository insert() method is not available (e.g. plugin not loaded),
+    // the apply skips gracefully rather than crashing.
     const { db, createFn } = makeMockDb({ uiSchemasFind: [] });
+    // No uiSchemaInsertFn provided → repo will not have .insert()
 
     const source = makeBundle({
       uiSchemas: [{ 'x-uid': 'uid-abc', name: 'schema-1', schema: { type: 'void' } }],
@@ -359,11 +383,29 @@ describe('applyBundle — UI blueprints', () => {
 
     const result = await applyBundle(db, source, {}, false);
 
-    // generic repo.create() does not rebuild uiSchemaTreePath — apply is skipped until Stage 3
     expect(createFn).not.toHaveBeenCalled();
     const entry = result.entries.find((e) => e.key === 'uid-abc');
     expect(entry?.status).toBe('skipped');
-    expect(entry?.warning).toMatch(/UiSchemaRepository|Stage 3/i);
+    expect(entry?.warning).toMatch(/UiSchemaRepository/i);
+  });
+
+  it('Stage 3: ui_schema apply uses UiSchemaRepository.insert() when available', async () => {
+    const insertFn = jest.fn().mockResolvedValue(undefined);
+    const { db, commitFn } = makeMockDb({ uiSchemasFind: [], uiSchemaInsertFn: insertFn });
+
+    const source = makeBundle({
+      uiSchemas: [{ 'x-uid': 'uid-abc', name: 'schema-1', schema: { type: 'void' } }],
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ 'x-uid': 'uid-abc' }),
+      expect.anything(),
+    );
+    expect(commitFn).toHaveBeenCalled();
+    const entry = result.entries.find((e) => e.key === 'uid-abc');
+    expect(entry?.status).toBe('ok');
   });
 
   it('applies added desktop route', async () => {
@@ -418,5 +460,105 @@ describe('applyBundle — dependency ordering', () => {
     // collection has 'name' but not 'collectionName'
     expect(firstValues.name).toBe('orders');
     expect(firstValues.collectionName).toBeUndefined();
+  });
+});
+
+// ─── Stage 3: flow_node delete ────────────────────────────────────────────────
+
+describe('applyBundle — Stage 3: flow_node delete', () => {
+  it('deletes flow_node when diff action=delete and workflow exists', async () => {
+    const existingWf = { id: 5, key: 'wf-a', title: 'A', type: 'schedule', enabled: true };
+    const existingNode = { id: 20, key: 'node-x', workflowId: 5, workflowKey: 'wf-a', type: 'notification', upstreamKey: null };
+    const { db, destroyFn, commitFn } = makeMockDb({
+      workflowsFind: [existingWf],
+      flowNodesFind: [existingNode],
+    });
+
+    // Source has the workflow with NO nodes (node was removed in source)
+    const source = makeBundle({
+      workflows: [{ key: 'wf-a', title: 'A', type: 'schedule', enabled: true, nodes: [] }],
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    expect(destroyFn).toHaveBeenCalled();
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-a.node-x');
+    expect(nodeEntry?.status).toBe('ok');
+    expect(commitFn).toHaveBeenCalled();
+  });
+
+  it('skips flow_node delete when parent workflow is not found', async () => {
+    const existingNode = { id: 20, key: 'node-x', workflowId: 999, workflowKey: 'wf-missing', type: 'notification', upstreamKey: null };
+    const { db, destroyFn } = makeMockDb({
+      workflowsFind: [], // workflow not in target
+      flowNodesFind: [existingNode],
+    });
+
+    const source = makeBundle({
+      workflows: [], // no workflows in source
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    // delete skipped — workflow not found
+    expect(destroyFn).not.toHaveBeenCalled();
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-missing.node-x');
+    // Either the node isn't in entries (workflow diff handled at workflow level) or it's skipped
+    if (nodeEntry) expect(nodeEntry.status).toBe('skipped');
+  });
+});
+
+// ─── Stage 3: backup-before-apply ────────────────────────────────────────────
+
+describe('applyBundle — Stage 3: backup-before-apply', () => {
+  function makeApp(available = true, filename = 'backup-20260718.zip') {
+    const createAction = jest.fn(async (ctx: Record<string, unknown>, next: () => Promise<void>) => {
+      (ctx as Record<string, unknown>).body = { name: filename, createdAt: '2026-07-18T00:00:00.000Z' };
+      await next();
+    });
+    return {
+      app: {
+        getPlugin: jest.fn().mockReturnValue(available ? {} : null),
+        resourceManager: { getAction: jest.fn().mockReturnValue(available ? createAction : undefined) },
+      },
+    };
+  }
+
+  it('includes backup info in result when backup succeeds', async () => {
+    const { db } = makeMockDb();
+    const { app } = makeApp(true);
+    const source = makeBundle({ collections: [{ name: 'x', title: 'X' }] });
+
+    const result = await applyBundle(
+      db, source, {}, false,
+      app as unknown as Parameters<typeof import('../server/apply').applyBundle>[4],
+    );
+
+    expect(result.backup).toBeDefined();
+    expect(result.backup?.available).toBe(true);
+    expect(result.backup?.filename).toBe('backup-20260718.zip');
+  });
+
+  it('backup info is absent when no app is passed (dryRun or explicit no-backup)', async () => {
+    const { db } = makeMockDb();
+    const source = makeBundle({ collections: [{ name: 'x', title: 'X' }] });
+
+    const result = await applyBundle(db, source, {}, true); // dryRun, no app
+
+    expect(result.backup).toBeUndefined();
+  });
+
+  it('backup info shows available=false when Backup Manager not installed', async () => {
+    const { db } = makeMockDb();
+    const { app } = makeApp(false);
+    const source = makeBundle({ collections: [{ name: 'x', title: 'X' }] });
+
+    const result = await applyBundle(
+      db, source, {}, false,
+      app as unknown as Parameters<typeof import('../server/apply').applyBundle>[4],
+    );
+
+    expect(result.backup).toBeDefined();
+    expect(result.backup?.available).toBe(false);
   });
 });
