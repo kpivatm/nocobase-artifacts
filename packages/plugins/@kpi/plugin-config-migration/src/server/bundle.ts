@@ -35,13 +35,11 @@ function hasRepo(db: Database, name: string): boolean {
 }
 
 async function safeFindAll(db: Database, repoName: string, opts: Record<string, unknown> = {}): Promise<Record<string, unknown>[]> {
+  // Only suppress errors for repos that don't exist (optional domains like workflows on fresh instances).
+  // Real query failures must propagate so the caller sees an accurate diff, not a spurious all-add.
   if (!hasRepo(db, repoName)) return [];
-  try {
-    const rows = await db.getRepository(repoName).find({ sort: ['id'], ...opts });
-    return rows.map(toJSON);
-  } catch {
-    return [];
-  }
+  const rows = await db.getRepository(repoName).find({ sort: ['id'], ...opts });
+  return rows.map(toJSON);
 }
 
 // ─── Stage 1: Collections & Fields ───────────────────────────────────────────
