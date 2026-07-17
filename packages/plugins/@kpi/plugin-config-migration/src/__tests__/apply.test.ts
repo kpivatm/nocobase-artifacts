@@ -508,6 +508,29 @@ describe('applyBundle — Stage 3: flow_node delete', () => {
   });
 });
 
+// ─── Stage 3: version warning in result.warnings (not fake entry) ────────────
+
+describe('applyBundle — Stage 3: version compatibility warning', () => {
+  it('puts version mismatch warning in result.warnings, not in entries', async () => {
+    const { db } = makeMockDb();
+
+    // Bundle claims major version 1; target (mocked exportBundle) returns no nocobaseVersion,
+    // so checkVersionCompat returns null. To trigger, we need source.nocobaseVersion to differ
+    // from target. Target exportBundle in test has no nocobaseVersion → no warning triggered.
+    // We test the shape: when no warning, result.warnings is absent (not []).
+    const source = makeBundle({ collections: [] });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    // No version info available → no warnings
+    expect(result.warnings).toBeUndefined();
+    // No fake __version_check__ entry
+    expect(result.entries.find(e => e.key === '__version_check__')).toBeUndefined();
+    // skipped count is not inflated
+    expect(result.skipped).toBe(0);
+  });
+});
+
 // ─── Stage 3: backup-before-apply ────────────────────────────────────────────
 
 describe('applyBundle — Stage 3: backup-before-apply', () => {

@@ -75,22 +75,77 @@ function sanitizeCollection(raw: Record<string, unknown>): CollectionSnapshot {
   return c;
 }
 
+// ─── Secret redaction ─────────────────────────────────────────────────────────
+// Workflow and flow_node configs can contain credentials (API tokens, SMTP passwords,
+// Authorization headers, etc.). Redact known-sensitive keys before writing to the bundle
+// so the bundle file can be stored/versioned without leaking secrets.
+// Policy: known field names are redacted by name (case-insensitive); unknown credentials
+// in custom config shapes are NOT automatically caught — treat bundles as potentially
+// sensitive and restrict file access accordingly.
+
+const SENSITIVE_FIELD_NAMES = new Set([
+  'password', 'passwd', 'secret', 'token', 'apikey', 'api_key',
+  'authorization', 'auth', 'credential', 'credentials',
+  'accesstoken', 'access_token', 'refreshtoken', 'refresh_token',
+  'privatekey', 'private_key', 'clientsecret', 'client_secret',
+  'secretkey', 'secret_key',
+]);
+
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_FIELD_NAMES.has(key.toLowerCase());
+}
+
+function redactConfig(obj: Record<string, unknown>): { result: Record<string, unknown>; redacted: boolean } {
+  let redacted = false;
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (isSensitiveKey(k)) {
+      result[k] = '[REDACTED]';
+      redacted = true;
+    } else if (Array.isArray(v)) {
+      const items = v.map((item) => {
+        if (item !== null && typeof item === 'object') {
+          const inner = redactConfig(item as Record<string, unknown>);
+          if (inner.redacted) redacted = true;
+          return inner.result;
+        }
+        return item;
+      });
+      result[k] = items;
+    } else if (v !== null && typeof v === 'object') {
+      const inner = redactConfig(v as Record<string, unknown>);
+      result[k] = inner.result;
+      if (inner.redacted) redacted = true;
+    } else {
+      result[k] = v;
+    }
+  }
+  return { result, redacted };
+}
+
 // ─── Stage 2: Workflows ───────────────────────────────────────────────────────
 
-function sanitizeNode(raw: Record<string, unknown>, workflowKey: string, nodeKeyById: Map<number, string>): FlowNodeSnapshot {
+function sanitizeNode(
+  raw: Record<string, unknown>,
+  workflowKey: string,
+  nodeKeyById: Map<number, string>,
+  redactedRef: { value: boolean },
+): FlowNodeSnapshot {
   const upstreamId = raw.upstreamId as number | null;
+  const { result: safeConfig, redacted } = redactConfig((raw.config ?? {}) as Record<string, unknown>);
+  if (redacted) redactedRef.value = true;
   return {
     key: raw.key as string,
     workflowKey,
     type: raw.type as string,
     title: (raw.title ?? null) as string | null,
-    config: (raw.config ?? {}) as Record<string, unknown>,
+    config: safeConfig,
     branchIndex: (raw.branchIndex ?? null) as number | null,
     upstreamKey: upstreamId != null ? (nodeKeyById.get(upstreamId) ?? null) : null,
   };
 }
 
-async function exportWorkflows(db: Database): Promise<WorkflowSnapshot[]> {
+async function exportWorkflows(db: Database, redactedRef: { value: boolean }): Promise<WorkflowSnapshot[]> {
   const rawWorkflows = await safeFindAll(db, 'workflows');
   const rawNodes = await safeFindAll(db, 'flow_nodes');
 
@@ -131,14 +186,17 @@ async function exportWorkflows(db: Database): Promise<WorkflowSnapshot[]> {
       if (!visited.has(node.id as number)) ordered.push(node);
     }
 
-    const nodes: FlowNodeSnapshot[] = ordered.map((n) => sanitizeNode(n, wfKey, nodeKeyById));
+    const nodes: FlowNodeSnapshot[] = ordered.map((n) => sanitizeNode(n, wfKey, nodeKeyById, redactedRef));
+
+    const { result: safeWfConfig, redacted: wfRedacted } = redactConfig((wf.config ?? {}) as Record<string, unknown>);
+    if (wfRedacted) redactedRef.value = true;
 
     return {
       key: wfKey,
       title: wf.title as string,
       type: wf.type as string,
       triggerType: wf.triggerType as string | undefined,
-      config: (wf.config ?? {}) as Record<string, unknown>,
+      config: safeWfConfig,
       enabled: Boolean(wf.enabled),
       description: (wf.description ?? null) as string | null,
       nodes,
@@ -263,8 +321,9 @@ export async function exportBundle(db: Database): Promise<Bundle> {
     return sanitizeField(raw);
   });
 
+  const redactedRef = { value: false };
   const [workflows, { roles, rolesResources }, { uiSchemas, desktopRoutes }] = await Promise.all([
-    exportWorkflows(db),
+    exportWorkflows(db, redactedRef),
     exportACL(db),
     exportUIBlueprints(db),
   ]);
@@ -283,6 +342,7 @@ export async function exportBundle(db: Database): Promise<Bundle> {
 
   const nocobaseVersion = detectNocobaseVersion();
   if (nocobaseVersion) bundle.nocobaseVersion = nocobaseVersion;
+  if (redactedRef.value) bundle.hasRedactedFields = true;
 
   return bundle;
 }
