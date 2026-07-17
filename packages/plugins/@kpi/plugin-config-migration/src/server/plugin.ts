@@ -60,9 +60,12 @@ export class PluginConfigMigrationServer extends Plugin {
 
     this.app.acl.allow(PLUGIN_NAME, 'status', 'loggedIn');
     this.app.acl.allow(PLUGIN_NAME, 'diff', 'loggedIn');
-    // export dumps full schema; apply performs DDL-level writes — both are admin-only
-    this.app.acl.allow(PLUGIN_NAME, 'export', 'admin');
-    this.app.acl.allow(PLUGIN_NAME, 'apply', 'admin');
+    // export dumps full schema; apply performs DDL-level writes — admin role via snippet
+    // 'admin' is not a registered ACL condition; use registerSnippet so admin role (pm.*) covers these
+    this.app.acl.registerSnippet({
+      name: `pm.${PLUGIN_NAME}`,
+      actions: [`${PLUGIN_NAME}:export`, `${PLUGIN_NAME}:apply`],
+    });
   }
 }
 
