@@ -1,0 +1,12 @@
+{
+  "plugin-config-migration": {
+    "Config Migration": "配置迁移",
+    "Export": "导出",
+    "Diff": "对比",
+    "Apply": "应用",
+    "Status": "状态",
+    "Dry Run": "试运行",
+    "Source Bundle": "源快照",
+    "Target Bundle": "目标快照"
+  }
+}

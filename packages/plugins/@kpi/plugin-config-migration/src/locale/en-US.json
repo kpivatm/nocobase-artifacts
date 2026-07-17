@@ -1,0 +1,12 @@
+{
+  "plugin-config-migration": {
+    "Config Migration": "Config Migration",
+    "Export": "Export",
+    "Diff": "Diff",
+    "Apply": "Apply",
+    "Status": "Status",
+    "Dry Run": "Dry Run",
+    "Source Bundle": "Source Bundle",
+    "Target Bundle": "Target Bundle"
+  }
+}
