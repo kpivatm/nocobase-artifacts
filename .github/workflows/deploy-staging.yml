@@ -1,14 +1,18 @@
 name: Deploy to Staging
 
-# New flow (Stage 4): export bundle from Dev → diff review → apply via plugin CLI
+# New flow (Stage 4): export bundle from Dev → diff review → apply via plugin CLI.
 # Bundle is never committed to git (CF-2): it lives only in the CI runner and as a
 # short-lived private artifact accessible only to users with repo access.
 #
-# Required secrets:
-#   DEV_NOCOBASE_URL        — Dev instance base URL
-#   DEV_NOCOBASE_API_TOKEN  — API token for dev instance (plugin-config-migration)
-#   STAGING_NOCOBASE_URL        — Staging instance base URL
-#   STAGING_NOCOBASE_API_TOKEN  — API token for staging instance
+# Required repo-level secrets:
+#   DEV_NOCOBASE_URL      — Dev instance base URL (e.g. http://192.168.145.231:13000)
+#   DEV_NOCOBASE_EMAIL    — Dev instance admin email
+#   DEV_NOCOBASE_PASSWORD — Dev instance admin password
+#
+# Required environment secrets (GitHub Environment: "staging"):
+#   STAGING_NOCOBASE_URL      — Staging instance base URL
+#   STAGING_NOCOBASE_EMAIL    — Staging instance admin email
+#   STAGING_NOCOBASE_PASSWORD — Staging instance admin password
 #
 # Required GitHub environment: "staging" (configure required reviewers for apply gate)
 
@@ -34,6 +38,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Authenticate to Dev instance
+        id: auth-dev
+        run: |
+          TOKEN=$(curl -sf -m 10 "$DEV_URL/api/auth:signIn" \
+            -H "Content-Type: application/json" \
+            -d '{"account":"'"$DEV_EMAIL"'","password":"'"$DEV_PASSWORD"'"}' \
+            | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: Failed to authenticate to Dev instance at $DEV_URL"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          DEV_URL: ${{ secrets.DEV_NOCOBASE_URL }}
+          DEV_EMAIL: ${{ secrets.DEV_NOCOBASE_EMAIL }}
+          DEV_PASSWORD: ${{ secrets.DEV_NOCOBASE_PASSWORD }}
+
       - name: Export config bundle from Dev
         run: |
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
@@ -41,7 +63,7 @@ jobs:
           echo "Bundle size: $(wc -c < /tmp/bundle.json) bytes"
         env:
           NOCOBASE_URL: ${{ secrets.DEV_NOCOBASE_URL }}
-          NOCOBASE_API_TOKEN: ${{ secrets.DEV_NOCOBASE_API_TOKEN }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth-dev.outputs.token }}
 
       - name: Upload bundle artifact (private — not committed to git, CF-2)
         uses: actions/upload-artifact@v4
@@ -49,6 +71,24 @@ jobs:
           name: config-bundle-${{ github.run_id }}
           path: /tmp/bundle.json
           retention-days: 1
+
+      - name: Authenticate to Staging instance
+        id: auth-staging
+        run: |
+          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
+            -H "Content-Type: application/json" \
+            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+            | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          STAGING_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
       - name: Diff bundle against Staging
         id: diff
@@ -70,7 +110,7 @@ jobs:
           fi
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth-staging.outputs.token }}
 
   # ─── Job 2: Apply to Staging (requires environment approval) ───────────────
   # Reviewer sees the diff in Job 1 logs before approving this job.
@@ -89,6 +129,24 @@ jobs:
         with:
           name: config-bundle-${{ github.run_id }}
           path: /tmp
+
+      - name: Authenticate to Staging instance
+        id: auth
+        run: |
+          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
+            -H "Content-Type: application/json" \
+            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+            | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          STAGING_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
       - name: Apply config to Staging (backup-before-apply)
         id: apply
@@ -120,7 +178,7 @@ jobs:
           exit $APPLY_EXIT
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Auto-rollback on apply failure
         if: failure() && steps.apply.outputs.backup_file != ''
@@ -131,4 +189,4 @@ jobs:
             rollback --backup-file "$BACKUP"
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}

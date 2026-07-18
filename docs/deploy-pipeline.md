@@ -17,9 +17,15 @@ Dev instance ──export──▶ bundle.json ──diff──▶ review ──
 Trước khi chạy pipeline lần đầu:
 
 1. **Plugin đã cài trên cả Dev và Staging** — `plugin-config-migration` phải active trên cả hai instance.
-2. **API Token** — tạo API token cho mỗi instance và set vào GitHub Secrets:
-   - `DEV_NOCOBASE_URL` + `DEV_NOCOBASE_API_TOKEN`
-   - `STAGING_NOCOBASE_URL` + `STAGING_NOCOBASE_API_TOKEN`
+2. **GitHub Secrets** — set vào GitHub theo hai cấp:
+   - Repo-level secrets (Settings → Secrets → Actions):
+     - `DEV_NOCOBASE_URL` — dev instance base URL
+     - `DEV_NOCOBASE_EMAIL` — dev admin email
+     - `DEV_NOCOBASE_PASSWORD` — dev admin password
+   - Environment secrets (Settings → Environments → staging → Secrets):
+     - `STAGING_NOCOBASE_URL` — staging instance base URL (đã set)
+     - `STAGING_NOCOBASE_EMAIL` — staging admin email (đã set)
+     - `STAGING_NOCOBASE_PASSWORD` — staging admin password (đã set)
 3. **GitHub Environment `staging`** — configure required reviewers để tạo approval gate trước khi apply.
 4. **CF-1 — Verify backup-before-apply thủ công** (điều kiện tiên quyết trước khi dùng cho prod):
    - Chạy apply một lần với `backup=true` → kiểm tra file backup tồn tại và đầy đủ.
