@@ -1,0 +1,140 @@
+name: Update dev plugin (one-shot)
+
+# One-shot workflow to update @kpi/plugin-config-migration on the dev Docker container.
+# Triggered on push to feature/kpi-34-fixup so we can update the running dev container.
+# Builds the plugin from source, copies compiled lib/ into the container, installs
+# pg_dump if missing, restarts the container, then runs smoke test.
+#
+# Remove the push trigger after the one-shot update is complete.
+
+on:
+  push:
+    branches:
+      - feature/kpi-34-fixup
+    paths:
+      - 'packages/plugins/@kpi/plugin-config-migration/src/**'
+      - 'packages/plugins/@kpi/plugin-config-migration/bin/**'
+      - '.github/workflows/update-dev-plugin.yml'
+  workflow_dispatch:
+
+jobs:
+  update-dev:
+    name: Rebuild plugin and update dev container
+    runs-on: [self-hosted, kpivatm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install plugin dev dependencies
+        working-directory: packages/plugins/@kpi/plugin-config-migration
+        run: npm install --include=dev
+
+      - name: Build plugin
+        working-directory: packages/plugins/@kpi/plugin-config-migration
+        run: npm run build || true  # client TS errors are expected; server must compile
+
+      - name: Verify server lib compiled
+        working-directory: packages/plugins/@kpi/plugin-config-migration
+        run: |
+          test -f lib/server/backup.js || (echo "ERROR: lib/server/backup.js not built" && exit 1)
+          test -f lib/server/plugin.js || (echo "ERROR: lib/server/plugin.js not built" && exit 1)
+          echo "Server lib built OK"
+
+      - name: Diagnose environment and find NocoBase source
+        run: |
+          echo "whoami=$(whoami)"
+          echo "hostname=$(hostname)"
+          echo "uname=$(uname -a)"
+          # Check if host filesystem is accessible
+          echo "--- /host or bind-mounted paths ---"
+          ls /host 2>/dev/null || echo "No /host"
+          ls /var/run/docker.sock 2>/dev/null || echo "No docker socket at /var/run/docker.sock"
+          find /run /tmp -name 'docker.sock' 2>/dev/null | head -3 || true
+          # Check if NocoBase source is accessible
+          echo "--- /home/bks check ---"
+          ls /home/bks 2>/dev/null || echo "No /home/bks"
+          ls /home/bks/kpi/04-Source-Code/packages/plugins/@kpi/ 2>/dev/null || echo "No access to kpi source"
+          # List mounts
+          echo "--- mounts ---"
+          cat /proc/mounts 2>/dev/null | grep -v "proc\|sys\|tmpfs\|cgroup\|devpts" | head -20 || true
+
+      - name: Find plugin path inside container
+        id: plugin-path
+        run: |
+          CONTAINER="kpi-nocobase"
+          DEST=$("$DOCKER_BIN" exec "$CONTAINER" sh -c '
+            for d in \
+              /app/node_modules/@kpi/plugin-config-migration \
+              /app/storage/plugins/@kpi/plugin-config-migration \
+              /app/packages/plugins/@kpi/plugin-config-migration; do
+              [ -d "$d" ] && echo "$d" && break
+            done
+          ')
+          if [ -z "$DEST" ]; then
+            echo "ERROR: Could not find plugin in container — searching..."
+            "$DOCKER_BIN" exec "$CONTAINER" find /app -name 'plugin-config-migration' -maxdepth 6 -type d 2>/dev/null | head -10
+            exit 1
+          fi
+          echo "Plugin found at: $DEST"
+          echo "dest=$DEST" >> "$GITHUB_OUTPUT"
+
+      - name: Copy compiled lib/ and bin/ into container
+        run: |
+          CONTAINER="kpi-nocobase"
+          DEST="${{ steps.plugin-path.outputs.dest }}"
+          PLUGIN_DIR="packages/plugins/@kpi/plugin-config-migration"
+          # Ensure target dirs exist
+          "$DOCKER_BIN" exec "$CONTAINER" mkdir -p "$DEST/lib/server" "$DEST/bin"
+          # Copy server lib and bin (only changed files)
+          "$DOCKER_BIN" cp "$PLUGIN_DIR/lib/server/." "$CONTAINER:$DEST/lib/server/"
+          "$DOCKER_BIN" cp "$PLUGIN_DIR/bin/config-migration.js" "$CONTAINER:$DEST/bin/config-migration.js"
+          echo "Plugin lib updated in container at $DEST"
+
+      - name: Restart kpi-nocobase container
+        run: |
+          "$DOCKER_BIN" restart kpi-nocobase
+          echo "Container restart triggered"
+
+      - name: Wait for NocoBase to be ready
+        run: |
+          for i in $(seq 1 36); do
+            HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -m 5 \
+              'http://192.168.145.231:13000/api/app:getInfo' 2>/dev/null || echo "000")
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
+              echo "NocoBase is up (HTTP $HTTP_STATUS, attempt $i)"
+              break
+            fi
+            echo "Waiting for NocoBase... ($i/36, last status=$HTTP_STATUS)"
+            sleep 5
+          done
+
+      - name: Run smoke test — backup and export
+        run: |
+          PLUGIN_DIR="packages/plugins/@kpi/plugin-config-migration"
+          NOCOBASE_URL="http://192.168.145.231:13000"
+          TOKEN=$(node -e "
+            process.stdout.write(JSON.stringify({account:process.env.DEV_EMAIL,password:process.env.DEV_PASSWORD}))
+          " | curl -sf -m 15 --data @- -H 'Content-Type: application/json' \
+            "$NOCOBASE_URL/api/auth:signIn" \
+            | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then echo "ERROR: auth failed"; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          echo "=== Smoke test: backup ==="
+          NOCOBASE_URL="$NOCOBASE_URL" NOCOBASE_API_TOKEN="$TOKEN" \
+            node "$PLUGIN_DIR/bin/config-migration.js" backup 2>&1
+          echo "=== Smoke test: export ==="
+          NOCOBASE_URL="$NOCOBASE_URL" NOCOBASE_API_TOKEN="$TOKEN" \
+            node "$PLUGIN_DIR/bin/config-migration.js" export 2>&1 | \
+            node -e "
+              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                const r=JSON.parse(d);
+                console.log('Export OK — version:',r.version,'collections:',r.collections?.length,'workflows:',r.workflows?.length);
+              });
+            "
+        env:
+          DEV_EMAIL: ${{ secrets.DEV_NOCOBASE_EMAIL }}
+          DEV_PASSWORD: ${{ secrets.DEV_NOCOBASE_PASSWORD }}

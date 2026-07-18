@@ -2,17 +2,14 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
-import { restoreBackup } from './backup';
-import type { NocoBaseApp } from './backup';
+import { createBackup, restoreFromBundle } from './backup';
+import type { Bundle } from './types';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
 
 export class PluginConfigMigrationServer extends Plugin {
   async load() {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const plugin = this;
-
     this.app.resourceManager.define({
       name: PLUGIN_NAME,
       actions: {
@@ -33,6 +30,15 @@ export class PluginConfigMigrationServer extends Plugin {
           await next();
         },
 
+        // POST /api/plugin-config-migration:backup
+        // Returns the current config bundle. Store it to use with rollback if needed.
+        // Response: { available: true, filename, createdAt, bundle: Bundle }
+        backup: async (ctx, next) => {
+          const result = await createBackup(ctx.db);
+          ctx.body = result;
+          await next();
+        },
+
         // POST /api/plugin-config-migration:diff
         diff: async (ctx, next) => {
           const { source, target } = ctx.action!.params.values ?? {};
@@ -49,7 +55,7 @@ export class PluginConfigMigrationServer extends Plugin {
 
         // POST /api/plugin-config-migration:apply
         // Body: { source: Bundle, dryRun?: boolean, migrationConfig?: MigrationConfig, backup?: boolean }
-        // Response includes backup.filename when backup=true and Backup Manager is available.
+        // Response includes backup.bundle when backup=true (use it with rollback on failure).
         apply: async (ctx, next) => {
           const { source, dryRun, migrationConfig, backup } = ctx.action!.params.values ?? {};
           if (!source) {
@@ -58,23 +64,24 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          const app = backup !== false ? (plugin.app as NocoBaseApp) : undefined;
-          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, app);
+          const doBackup = backup !== false;
+          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, doBackup);
           ctx.body = result;
           await next();
         },
 
         // POST /api/plugin-config-migration:rollback
-        // Body: { filename: string } — filename from a prior apply response's backup.filename
+        // Body: { bundle: Bundle } — the bundle returned by a prior backup or apply response
+        // Re-applies the saved bundle to restore the previous config state.
         rollback: async (ctx, next) => {
-          const { filename } = ctx.action!.params.values ?? {};
-          if (!filename) {
+          const { bundle } = ctx.action!.params.values ?? {};
+          if (!bundle) {
             ctx.status = 400;
-            ctx.body = { error: 'filename is required (from a prior apply backup.filename).' };
+            ctx.body = { error: 'bundle is required (from a prior backup or apply response backup.bundle).' };
             await next();
             return;
           }
-          const result = await restoreBackup(plugin.app as NocoBaseApp, filename);
+          const result = await restoreFromBundle(ctx.db, bundle as Bundle);
           ctx.body = result;
           await next();
         },
@@ -83,11 +90,12 @@ export class PluginConfigMigrationServer extends Plugin {
 
     this.app.acl.allow(PLUGIN_NAME, 'status', 'loggedIn');
     this.app.acl.allow(PLUGIN_NAME, 'diff', 'loggedIn');
-    // export, apply, rollback — DDL-level operations, admin only
+    // export, backup, apply, rollback — DDL-level operations, admin only
     this.app.acl.registerSnippet({
       name: `pm.${PLUGIN_NAME}`,
       actions: [
         `${PLUGIN_NAME}:export`,
+        `${PLUGIN_NAME}:backup`,
         `${PLUGIN_NAME}:apply`,
         `${PLUGIN_NAME}:rollback`,
       ],

@@ -40,10 +40,11 @@ jobs:
 
       - name: Authenticate to Dev instance
         id: auth-dev
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          TOKEN=$(curl -sf -m 10 "$DEV_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$DEV_EMAIL"'","password":"'"$DEV_PASSWORD"'"}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.DEV_EMAIL,password:process.env.DEV_PASSWORD}))" \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
+              "$DEV_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Dev instance at $DEV_URL"
@@ -74,10 +75,11 @@ jobs:
 
       - name: Authenticate to Staging instance
         id: auth-staging
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.STAGING_EMAIL,password:process.env.STAGING_PASSWORD}))" \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
+              "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
@@ -119,6 +121,8 @@ jobs:
   apply-staging:
     name: Apply to Staging
     needs: export-and-diff
+    # Skip entirely when there are no changes to apply
+    if: needs.export-and-diff.outputs.has_changes == 'true'
     runs-on: [self-hosted, kpivatm]
     environment: staging
     steps:
@@ -132,10 +136,11 @@ jobs:
 
       - name: Authenticate to Staging instance
         id: auth
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.STAGING_EMAIL,password:process.env.STAGING_PASSWORD}))" \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
+              "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
@@ -148,7 +153,28 @@ jobs:
           STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
           STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
-      - name: Apply config to Staging (backup-before-apply)
+      - name: Pre-apply backup
+        id: pre-backup
+        # Skip for dry-run (nothing will be written, no rollback needed).
+        # Hard-fail when backup is unavailable so apply never runs without a safety net.
+        # Saves the config bundle JSON to /tmp/pre_backup.json for use in rollback.
+        # No pg_dump / Backup Manager dependency — uses plugin-config-migration:backup.
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            backup --out /tmp/pre_backup.json
+          if [ ! -s /tmp/pre_backup.json ]; then
+            echo "ERROR: Pre-apply backup failed — /tmp/pre_backup.json is empty or missing."
+            echo "Cannot proceed with apply without a valid backup."
+            exit 1
+          fi
+          echo "Pre-apply backup created: /tmp/pre_backup.json ($(wc -c < /tmp/pre_backup.json) bytes)"
+          echo "backup_file=/tmp/pre_backup.json" >> "$GITHUB_OUTPUT"
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Apply config to Staging
         id: apply
         run: |
           DRY_RUN_FLAG=""
@@ -156,35 +182,20 @@ jobs:
             DRY_RUN_FLAG="--dry-run"
             echo "Dry-run mode — no changes will be written."
           fi
-
-          # Capture output even on failure so we can extract the backup filename for rollback
-          set +e
-          RESULT=$(node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
-            apply --source /tmp/bundle.json $DRY_RUN_FLAG 2>&1)
-          APPLY_EXIT=$?
-
-          echo "$RESULT"
-
-          # Extract backup filename from the JSON result for auto-rollback
-          BACKUP_FILE=$(echo "$RESULT" | \
-            node -e "let d=''; process.stdin.on('data',c=>d+=c); \
-              process.stdin.on('end',()=>{ \
-                try { const r=JSON.parse(d); \
-                  console.log((r.data||r).backup?.filename||''); \
-                } catch { console.log(''); } \
-              });" 2>/dev/null || echo "")
-
-          echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
-          exit $APPLY_EXIT
+          # --no-backup: backup was taken in pre-backup step (skipped for dry-run, no-op there)
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            apply --source /tmp/bundle.json --no-backup $DRY_RUN_FLAG
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
           NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Auto-rollback on apply failure
-        if: failure() && steps.apply.outputs.backup_file != ''
+        # Re-applies the pre-apply bundle to restore Staging config state.
+        # No pg_dump / Backup Manager — uses plugin-config-migration:rollback.
+        if: failure() && steps.pre-backup.outputs.backup_file != ''
         run: |
-          BACKUP="${{ steps.apply.outputs.backup_file }}"
-          echo "Apply failed — initiating rollback to backup: $BACKUP"
+          BACKUP="${{ steps.pre-backup.outputs.backup_file }}"
+          echo "Apply failed — initiating rollback from bundle: $BACKUP"
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
             rollback --backup-file "$BACKUP"
         env:
