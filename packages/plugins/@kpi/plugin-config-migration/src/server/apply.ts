@@ -223,16 +223,21 @@ async function applyWorkflowUpdate(
   db: Database,
   wf: WorkflowSnapshot,
   txOpt: Record<string, unknown>,
-  targetConfig: Record<string, unknown>,
 ): Promise<void> {
   const workflowsRepo = db.getRepository('workflows');
+  // Read raw config from DB — entry.target.config is already redacted by exportBundle
+  // and would re-introduce [REDACTED] into the merge base, defeating the protection.
+  const existingRows = await workflowsRepo.find({ filter: { key: wf.key }, ...txOpt });
+  const rawTargetConfig = existingRows.length > 0
+    ? ((existingRows[0] as unknown as Record<string, unknown>).config ?? {}) as Record<string, unknown>
+    : {};
   await workflowsRepo.update({
     filter: { key: wf.key },
     values: {
       title: wf.title,
       type: wf.type,
       triggerType: wf.triggerType,
-      config: mergePreservingRedacted(wf.config ?? {}, targetConfig),
+      config: mergePreservingRedacted(wf.config ?? {}, rawTargetConfig),
       enabled: wf.enabled,
       description: wf.description ?? null,
     },
@@ -406,8 +411,7 @@ async function applyEntry(
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await applyWorkflowAdd(db, src, txOpt);
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
-      const tgt = entry.target as WorkflowSnapshot | undefined;
-      await applyWorkflowUpdate(db, src, txOpt, tgt?.config ?? {});
+      await applyWorkflowUpdate(db, src, txOpt);
     }
     return { status: 'ok' };
   }
@@ -426,13 +430,18 @@ async function applyEntry(
       const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey }, ...txOpt });
       const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
       if (wfId == null) return { status: 'skipped', warning: `Parent workflow "${src.workflowKey}" not found` };
-      const tgt = entry.target as FlowNodeSnapshot | undefined;
+      // Read raw config from DB — entry.target.config is already redacted by exportBundle
+      // and cannot be used as the merge base (real secret would remain [REDACTED] after merge).
+      const existingNodes = await repo.find({ filter: { key: src.key, workflowId: wfId }, ...txOpt });
+      const rawNodeConfig = existingNodes.length > 0
+        ? ((existingNodes[0] as unknown as Record<string, unknown>).config ?? {}) as Record<string, unknown>
+        : {};
       await repo.update({
         filter: { key: src.key, workflowId: wfId },
         values: {
           type: src.type,
           title: src.title ?? null,
-          config: mergePreservingRedacted(src.config ?? {}, tgt?.config ?? {}),
+          config: mergePreservingRedacted(src.config ?? {}, rawNodeConfig),
           branchIndex: src.branchIndex ?? null,
         },
         ...txOpt,
