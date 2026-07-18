@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Apply NocoBase artifacts lên instance chỉ định.
+# Apply NocoBase artifacts to a designated instance.
 # Usage: ./scripts/apply.sh [module] [env] [--yes]
 # Example: ./scripts/apply.sh kpi staging
-# CI: set CI=true or pass --yes to skip interactive prompt; set env vars directly instead of .env file.
+#          ./scripts/apply.sh shared staging
+#          ./scripts/apply.sh crm production
+# CI: set CI=true or pass --yes to skip prompt; set env vars instead of .env file.
 
 set -euo pipefail
 
@@ -27,6 +29,12 @@ else
 fi
 
 MODULE_DIR="$REPO_ROOT/modules/$MODULE"
+if [[ ! -d "$MODULE_DIR" ]]; then
+  echo "ERROR: Module directory not found: $MODULE_DIR"
+  echo "  Available modules: $(ls "$REPO_ROOT/modules/" 2>/dev/null | tr '\n' ' ' || echo '(none)')"
+  exit 1
+fi
+
 echo "=== Apply artifacts: module=$MODULE env=$ENV ==="
 echo "    NocoBase: $NOCOBASE_URL"
 echo ""
@@ -48,58 +56,102 @@ if [[ "${CI:-}" == "true" ]]; then
   nb env use "$NB_ENV_NAME" 2>/dev/null || true
 fi
 
-# Tạo revision TRƯỚC khi apply (rollback point)
+# --- Step 0: Pre-deploy revision snapshot ---
 echo "[0] Creating revision snapshot (pre-deploy)..."
-REVISION_NOTE="pre-deploy-${MODULE}-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-nb revision create --note "$REVISION_NOTE" 2>/dev/null && echo "  ✓ Revision: $REVISION_NOTE" \
+REVISION_NOTE="pre-deploy-${MODULE}-$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+nb revision create --note "$REVISION_NOTE" 2>/dev/null \
+  && echo "  ✓ Revision: $REVISION_NOTE" \
   || echo "  ⚠ Revision create failed (non-fatal, continuing)"
 
-if [[ "$MODULE" == "kpi" ]]; then
+# --- Step 1: Plugin check (from manifest.json) ---
+echo ""
+echo "[1/5] Checking required plugins..."
+MANIFEST="$MODULE_DIR/manifest.json"
+if [[ -f "$MANIFEST" ]]; then
+  PLUGIN_LIST=$(node -e "
+    const m = JSON.parse(require('fs').readFileSync('$MANIFEST'));
+    (m.plugins || []).forEach(p => console.log(p));
+  " 2>/dev/null || echo "")
+  if [[ -n "$PLUGIN_LIST" ]]; then
+    while IFS= read -r P; do
+      [[ -z "$P" ]] && continue
+      nb plugin list 2>/dev/null | grep -q "$P" \
+        && echo "  ✓ $P" \
+        || echo "  ⚠ $P NOT FOUND — run: nb plugin enable $P"
+    done <<< "$PLUGIN_LIST"
+  else
+    echo "  (manifest.json has no plugins array — skipping)"
+  fi
+else
+  echo "  (no manifest.json — skipping plugin check)"
+fi
 
-  # Step 1 — Verify plugins
-  echo ""
-  echo "[1/5] Checking required plugins..."
-  for P in plugin-flow-engine plugin-workflow plugin-acl plugin-action-export plugin-action-import plugin-auth; do
-    nb plugin list 2>/dev/null | grep -q "$P" \
-      && echo "  ✓ @nocobase/$P" \
-      || echo "  ⚠ @nocobase/$P NOT FOUND — run: nb plugin enable @nocobase/$P"
+# Helper: strip {data: ...} API-response wrapper if present, write unwrapped JSON to OUTPUT path
+unwrap_json() {
+  local INPUT="$1" OUTPUT="$2"
+  node -e "
+    const d = JSON.parse(require('fs').readFileSync('$INPUT'));
+    const body = (d && d.data !== undefined) ? d.data : d;
+    require('fs').writeFileSync('$OUTPUT', JSON.stringify(body));
+  "
+}
+
+# --- Step 2: Collections ---
+echo ""
+echo "[2/5] Applying collections (data model)..."
+COLL_DIR="$MODULE_DIR/collections"
+if [[ -d "$COLL_DIR" ]]; then
+  COUNT=0
+  for COLL_FILE in "$COLL_DIR"/*.collection.json; do
+    [[ -f "$COLL_FILE" ]] || continue
+    COLL_NAME=$(basename "$COLL_FILE" .collection.json)
+    TMPBODY=$(mktemp /tmp/coll_XXXXXX.json)
+    unwrap_json "$COLL_FILE" "$TMPBODY"
+    nb api data-modeling collections apply --body-file "$TMPBODY" \
+      && echo "  ✓ $COLL_NAME" || echo "  ✗ $COLL_NAME (failed)"
+    rm -f "$TMPBODY"
+    COUNT=$((COUNT + 1))
   done
+  [[ "$COUNT" -eq 0 ]] && echo "  (no *.collection.json files found)"
+else
+  echo "  (no collections/ directory)"
+fi
 
-  # Step 2 — Collections (order matters)
-  echo ""
-  echo "[2/5] Applying collections (data model)..."
-  nb api data-modeling collections apply --body-file "$MODULE_DIR/collections/kpi_groups.collection.json" \
-    && echo "  ✓ kpi_groups"
-  nb api data-modeling collections apply --body-file "$MODULE_DIR/collections/kpi_catalog.collection.json" \
-    && echo "  ✓ kpi_catalog"
-  nb api data-modeling collections apply --body-file "$MODULE_DIR/collections/kpi_change_history.collection.json" \
-    && echo "  ✓ kpi_change_history"
-  nb api data-modeling collections apply --body-file "$MODULE_DIR/collections/kpi_proposals.collection.json" \
-    && echo "  ✓ kpi_proposals"
+# --- Step 3: Page blueprints ---
+echo ""
+echo "[3/5] Applying page blueprints..."
+BP_DIR="$MODULE_DIR/blueprints"
+if [[ -d "$BP_DIR" ]]; then
+  COUNT=0
+  for BP_FILE in "$BP_DIR"/*.blueprint.json; do
+    [[ -f "$BP_FILE" ]] || continue
+    BP_NAME=$(basename "$BP_FILE" .blueprint.json)
+    nb api flow-surfaces apply-blueprint --mode replace --body-file "$BP_FILE" \
+      && echo "  ✓ $BP_NAME" || echo "  ✗ $BP_NAME (failed)"
+    COUNT=$((COUNT + 1))
+  done
+  [[ "$COUNT" -eq 0 ]] && echo "  (no *.blueprint.json files found)"
+else
+  echo "  (no blueprints/ directory)"
+fi
 
-  # Step 3 — Page blueprints
-  echo ""
-  echo "[3/5] Applying page blueprints..."
-  nb api flow-surfaces apply-blueprint --mode replace \
-    --body-file "$MODULE_DIR/blueprints/kpi_dmc_page.blueprint.json" \
-    && echo "  ✓ kpi_dmc_page (Danh mục KPI)"
+# --- Step 4: Workflows ---
+echo ""
+echo "[4/5] Applying workflows (enabled, import with nodes)..."
+WF_DIR="$MODULE_DIR/workflows"
 
-  # Step 4 — Workflows (enabled only, preserving node chain)
-  echo ""
-  echo "[4/5] Applying workflows (enabled, import with nodes)..."
-  echo "  ⚠ Skip on existing instance where workflows already exist."
-
-  # Write node-import helper script to a temp file to avoid shell quoting issues
-  TMPSCRIPT=$(mktemp /tmp/wf_import_XXXXXX.js)
-  cat > "$TMPSCRIPT" << 'JSEOF'
+TMPSCRIPT=$(mktemp /tmp/wf_import_XXXXXX.js)
+cat > "$TMPSCRIPT" << 'JSEOF'
 const fs = require('fs');
 const { execSync } = require('child_process');
 
 const wfFile = process.argv[2];
-const wfData = JSON.parse(fs.readFileSync(wfFile)).data;
+const raw = JSON.parse(fs.readFileSync(wfFile));
+// Support both bare workflow objects and {data: ...} API-response wrapper
+const wfData = (raw && raw.data !== undefined) ? raw.data : raw;
 const nodes = wfData.nodes || [];
 
-// Create workflow record (disabled — enable manually after verification)
+// Create workflow (disabled — enable manually after verification)
 const wfBody = {
   title: wfData.title,
   type: wfData.type,
@@ -130,13 +182,8 @@ if (!nodes.length) {
   process.exit(0);
 }
 
-// Topological sort: process nodes in order where each node's upstream is already processed.
-// Handles linear chains AND condition branches (nodes with branchIndex, multiple children of one upstream).
-const byId = {};
-nodes.forEach(n => { byId[n.id] = n; });
-const idMap = {};  // old id → new id
-
-// BFS from roots (upstreamId === null); each processed node enqueues its children
+// BFS from roots — handles linear chains and condition branches
+const idMap = {};
 const queue = nodes.filter(n => n.upstreamId === null);
 const visited = new Set();
 const ordered = [];
@@ -145,13 +192,12 @@ while (queue.length) {
   if (visited.has(node.id)) continue;
   visited.add(node.id);
   ordered.push(node);
-  // Children = all nodes whose upstreamId === this node's id (covers both main chain + branches)
   nodes.filter(n => n.upstreamId === node.id).forEach(child => queue.push(child));
 }
 
 for (const current of ordered) {
   const nodeBody = {
-    key: current.key,   // preserve key so jobsMapByNodeKey references in sibling configs stay valid
+    key: current.key,   // preserve key so jobsMapByNodeKey refs in sibling configs stay valid
     type: current.type,
     title: current.title,
     config: current.config,
@@ -165,8 +211,7 @@ for (const current of ordered) {
       `nb api resource create --resource "workflows/${newWfId}/nodes" --body-file "${nBodyFile}" -j`,
       { encoding: 'utf8' }
     );
-    const newNodeId = JSON.parse(nodeOut).data.id;
-    idMap[current.id] = newNodeId;
+    idMap[current.id] = JSON.parse(nodeOut).data.id;
     console.log(`    ✓ Node ${current.type}: ${current.title || '(untitled)'}`);
   } catch (e) {
     console.error(`    ✗ Node ${current.type} failed: ` + e.message);
@@ -175,56 +220,68 @@ for (const current of ordered) {
 }
 JSEOF
 
-  for WF_FILE in "$MODULE_DIR/workflows/"*.enabled.json; do
+if [[ -d "$WF_DIR" ]]; then
+  COUNT=0
+  for WF_FILE in "$WF_DIR"/*.enabled.json; do
     [[ -f "$WF_FILE" ]] || continue
     node "$TMPSCRIPT" "$WF_FILE" 2>&1 || echo "    ⚠ Skipped (may already exist)"
+    COUNT=$((COUNT + 1))
   done
-  rm -f "$TMPSCRIPT"
+  [[ "$COUNT" -eq 0 ]] && echo "  (no *.enabled.json workflow files found)"
+else
+  echo "  (no workflows/ directory)"
+fi
+rm -f "$TMPSCRIPT"
 
-  # Step 5 — ACL roles and permissions
-  echo ""
-  echo "[5/5] Applying ACL roles and permissions..."
-  KPI_ROLES="sysadmin manager leader specialist"
-  KPI_COLLS="kpi_groups kpi_catalog kpi_change_history kpi_proposals"
+# --- Step 5: ACL roles and permissions ---
+echo ""
+echo "[5/5] Applying ACL roles and permissions..."
+ACL_DIR="$MODULE_DIR/acl"
 
-  # Ensure roles exist
-  for ROLE in $KPI_ROLES; do
-    ROLE_FILE="$MODULE_DIR/acl/roles-with-permissions.json"
-    if [[ -f "$ROLE_FILE" ]]; then
-      ROLE_TITLE=$(node -e "
-        const d=JSON.parse(require('fs').readFileSync('$ROLE_FILE'));
-        const r=(d.data||[]).find(r=>r.name==='$ROLE');
-        console.log(r?r.title:'');
-      " 2>/dev/null || echo "")
-      BODY="{\"name\":\"$ROLE\",\"title\":\"${ROLE_TITLE:-$ROLE}\"}"
+if [[ ! -d "$ACL_DIR" ]]; then
+  echo "  (no acl/ directory)"
+else
+  ROLE_FILE="$ACL_DIR/roles-with-permissions.json"
+
+  if [[ -f "$ROLE_FILE" ]]; then
+    # Create/upsert all roles found in the file
+    ROLE_LINES=$(node -e "
+      const d = JSON.parse(require('fs').readFileSync('$ROLE_FILE'));
+      (d.data || []).forEach(r => console.log(r.name + '|' + (r.title || r.name)));
+    " 2>/dev/null || echo "")
+
+    while IFS= read -r LINE; do
+      [[ -z "$LINE" ]] && continue
+      ROLE_NAME="${LINE%%|*}"
+      ROLE_TITLE="${LINE#*|}"
       RBODY=$(mktemp /tmp/role_XXXXXX.json)
-      echo "$BODY" > "$RBODY"
+      printf '{"name":"%s","title":"%s"}' "$ROLE_NAME" "$ROLE_TITLE" > "$RBODY"
       nb api resource create --resource roles --body-file "$RBODY" -j >/dev/null 2>&1 \
-        && echo "  ✓ Role created: $ROLE" \
-        || echo "  ✓ Role exists: $ROLE (skipped)"
+        && echo "  ✓ Role created: $ROLE_NAME" \
+        || echo "  ✓ Role exists: $ROLE_NAME (skipped)"
       rm -f "$RBODY"
-    fi
-  done
+    done <<< "$ROLE_LINES"
+  else
+    echo "  ⚠ No acl/roles-with-permissions.json — skipping role creation"
+  fi
 
-  # Apply per-collection permissions with action grants
-  for ROLE in $KPI_ROLES; do
-    for COLL in $KPI_COLLS; do
-      RES_FILE="$MODULE_DIR/acl/resources/role-${ROLE}-${COLL}.json"
-      [[ -f "$RES_FILE" ]] || { echo "  ⚠ Missing: $RES_FILE"; continue; }
-
-      TMPNODE=$(mktemp /tmp/aclbody_XXXXXX.js)
-      cat > "$TMPNODE" << 'ACLEOF'
+  # Apply per-collection permissions for each role
+  RESOURCES_DIR="$ACL_DIR/resources"
+  if [[ -d "$RESOURCES_DIR" ]]; then
+    TMPNODE=$(mktemp /tmp/aclbody_XXXXXX.js)
+    cat > "$TMPNODE" << 'ACLEOF'
 const fs = require('fs');
 const { execSync } = require('child_process');
 const resFile = process.argv[2];
 const role = process.argv[3];
 const coll = process.argv[4];
 
-const d = JSON.parse(fs.readFileSync(resFile)).data;
+const raw = JSON.parse(fs.readFileSync(resFile));
+const d = (raw && raw.data !== undefined) ? raw.data : raw;
 const actions = (d.actions || []).map(a => ({
   name: a.name,
   fields: a.fields || [],
-  scopeId: undefined   // scopeId is env-specific, omit for portability
+  scopeId: undefined   // scopeId is env-specific; omit for portability
 }));
 
 const body = {
@@ -236,33 +293,54 @@ const bf = fs.mkdtempSync('/tmp/acl') + '/body.json';
 fs.writeFileSync(bf, JSON.stringify(body));
 
 try {
-  // Try create first, fall back to update if already exists
   execSync(
     `nb api acl roles data-source-resources create --role-name "${role}" --data-source-key main --body-file "${bf}" -j`,
-    { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }
+    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
   );
   console.log(`  ✓ ACL ${role}/${coll}`);
 } catch {
   try {
     execSync(
       `nb api acl roles data-source-resources update --role-name "${role}" --name "${coll}" --data-source-key main --body-file "${bf}" -j`,
-      { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     console.log(`  ✓ ACL updated ${role}/${coll}`);
   } catch (e2) {
-    console.error(`  ⚠ ACL ${role}/${coll} skipped: ` + e2.message.slice(0,120));
+    console.error(`  ⚠ ACL ${role}/${coll} skipped: ` + e2.message.slice(0, 120));
   }
 }
 fs.unlinkSync(bf);
 ACLEOF
-      node "$TMPNODE" "$RES_FILE" "$ROLE" "$COLL" 2>&1
-      rm -f "$TMPNODE"
-    done
-  done
 
-else
-  echo "ERROR: Unknown module '$MODULE'. Add apply logic for it in scripts/apply.sh."
-  exit 1
+    # Discover role names from roles-with-permissions.json to parse filenames unambiguously.
+    # Convention: acl/resources/role-{ROLE}-{COLLECTION}.json
+    # Iterating by known role name avoids ambiguity when both role and collection use underscores.
+    KNOWN_ROLES=""
+    if [[ -f "$ROLE_FILE" ]]; then
+      KNOWN_ROLES=$(node -e "
+        const d = JSON.parse(require('fs').readFileSync('$ROLE_FILE'));
+        (d.data || []).forEach(r => console.log(r.name));
+      " 2>/dev/null || echo "")
+    fi
+
+    if [[ -z "$KNOWN_ROLES" ]]; then
+      echo "  ⚠ No known roles — cannot apply resource permissions"
+    else
+      while IFS= read -r ROLE_NAME; do
+        [[ -z "$ROLE_NAME" ]] && continue
+        for RES_FILE in "$RESOURCES_DIR/role-${ROLE_NAME}-"*.json; do
+          [[ -f "$RES_FILE" ]] || continue
+          BASENAME=$(basename "$RES_FILE" .json)
+          COLL_NAME="${BASENAME#role-${ROLE_NAME}-}"
+          node "$TMPNODE" "$RES_FILE" "$ROLE_NAME" "$COLL_NAME" 2>&1
+        done
+      done <<< "$KNOWN_ROLES"
+    fi
+
+    rm -f "$TMPNODE"
+  else
+    echo "  (no acl/resources/ directory)"
+  fi
 fi
 
 echo ""
