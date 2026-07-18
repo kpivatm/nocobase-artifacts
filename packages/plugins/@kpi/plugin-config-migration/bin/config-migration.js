@@ -5,21 +5,27 @@
  * Usage:
  *   config-migration export   [--url <base>] [--token <api-token>] [--out <file>]
  *   config-migration diff     [--url <base>] [--token <api-token>] --source <file>
- *   config-migration backup   [--url <base>] [--token <api-token>] [--print-filename]
- *   config-migration apply    [--url <base>] [--token <api-token>] --source <file> [--dry-run] [--no-backup] [--config <config-file>]
- *   config-migration rollback [--url <base>] [--token <api-token>] --backup-file <filename>
+ *   config-migration backup   [--url <base>] [--token <api-token>] [--out <file>] [--print-filename]
+ *   config-migration apply    [--url <base>] [--token <api-token>] --source <file> [--dry-run] [--no-backup] [--backup-out <file>] [--config <config-file>]
+ *   config-migration rollback [--url <base>] [--token <api-token>] --backup-file <file>
  *
  * Options:
- *   --url     Base URL of the NocoBase instance (default: $NOCOBASE_URL or http://localhost:13000)
- *   --token   API token for authentication (default: $NOCOBASE_API_TOKEN)
- *   --out     Output file for export command (default: stdout)
- *   --source  Path to bundle JSON file (required for diff/apply)
- *   --dry-run For apply: show what would change without writing
- *   --no-backup  For apply: skip backup-before-apply
- *   --config  Path to migrationConfig JSON file (for apply)
- *   --backup-file  For rollback: backup filename from a prior apply response
+ *   --url         Base URL of the NocoBase instance (default: $NOCOBASE_URL or http://localhost:13000)
+ *   --token       API token for authentication (default: $NOCOBASE_API_TOKEN)
+ *   --out         Output file for export/backup (default: stdout for export, required for backup in CI)
+ *   --source      Path to bundle JSON file (required for diff/apply)
+ *   --dry-run     For apply: show what would change without writing
+ *   --no-backup   For apply: skip pre-apply config backup
+ *   --backup-out  For apply: save the pre-apply backup bundle to this file
+ *   --config      Path to migrationConfig JSON file (for apply)
+ *   --backup-file For rollback: path to backup bundle file saved by backup or apply --backup-out
+ *   --print-filename  For backup: print only the filename to stdout (for CI scripts); exits 1 when unavailable
  *
- * All commands output JSON to stdout. Exit code 0 = success, non-zero = error.
+ * Backup strategy: uses plugin-config-migration:export (no pg_dump / Backup Manager dependency).
+ *   backup  → exports current config bundle, saves to --out file
+ *   rollback → re-applies a saved bundle to restore previous state
+ *
+ * All commands output JSON to stdout unless redirected. Exit code 0 = success, non-zero = error.
  */
 
 'use strict';
@@ -132,7 +138,7 @@ async function cmdDiff(baseUrl, token, sourceFile) {
   }
 }
 
-async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, configFile) {
+async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, backupOutFile, configFile) {
   if (!sourceFile) throw new Error('--source <file> is required for apply');
   const source = readBundle(sourceFile);
   let migrationConfig = {};
@@ -146,34 +152,52 @@ async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, configFile
     backup: !noBackup,
   };
   const result = await apiPost(baseUrl, token, 'apply', payload);
+
+  // Save backup bundle if requested
+  if (backupOutFile && result.backup && result.backup.bundle) {
+    fs.writeFileSync(path.resolve(backupOutFile), JSON.stringify(result.backup.bundle, null, 2), 'utf8');
+    process.stderr.write(`Pre-apply backup saved to ${backupOutFile}\n`);
+  }
+
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   const hasErrors = result.entries && result.entries.some((e) => e.status === 'error');
   if (hasErrors) process.exitCode = 1;
 }
 
-async function cmdBackup(baseUrl, token, printFilename) {
+async function cmdBackup(baseUrl, token, outFile, printFilename) {
   const result = await apiPost(baseUrl, token, 'backup', {});
+
   if (printFilename) {
     // For CI scripts: print just the filename on stdout, exit 1 when unavailable or no filename.
     process.stdout.write((result.filename || '') + '\n');
     if (!result.available || !result.filename) {
       process.exitCode = 1;
     }
+    return;
+  }
+
+  if (outFile && result.bundle) {
+    // Save the bundle to a file for later rollback use
+    fs.writeFileSync(path.resolve(outFile), JSON.stringify(result.bundle, null, 2), 'utf8');
+    process.stderr.write(`Backup bundle saved to ${outFile}\n`);
+    // Print summary without the bundle to stdout
+    const { bundle: _bundle, ...summary } = result;
+    process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
   } else {
+    // Print full result including bundle
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-    if (!result.available) {
-      process.stderr.write('Info: Backup Manager plugin is not available on this instance (backup:create action not registered).\n');
-      process.exitCode = 1;
-    } else if (!result.filename) {
-      process.stderr.write('Warning: backup succeeded but returned no filename.\n');
-      process.exitCode = 1;
-    }
+  }
+
+  if (!result.available) {
+    process.stderr.write('Warning: backup returned available=false\n');
+    process.exitCode = 1;
   }
 }
 
 async function cmdRollback(baseUrl, token, backupFile) {
-  if (!backupFile) throw new Error('--backup-file <filename> is required for rollback');
-  const result = await apiPost(baseUrl, token, 'rollback', { filename: backupFile });
+  if (!backupFile) throw new Error('--backup-file <path> is required for rollback (bundle JSON saved by backup or apply --backup-out)');
+  const bundle = readBundle(backupFile);
+  const result = await apiPost(baseUrl, token, 'rollback', { bundle });
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   if (!result.success) process.exitCode = 1;
 }
@@ -200,10 +224,17 @@ async function main() {
       await cmdDiff(baseUrl, token, args['source']);
       break;
     case 'backup':
-      await cmdBackup(baseUrl, token, args['print-filename']);
+      await cmdBackup(baseUrl, token, args['out'], args['print-filename']);
       break;
     case 'apply':
-      await cmdApply(baseUrl, token, args['source'], args['dry-run'], args['no-backup'], args['config']);
+      await cmdApply(
+        baseUrl, token,
+        args['source'],
+        args['dry-run'],
+        args['no-backup'],
+        args['backup-out'],
+        args['config'],
+      );
       break;
     case 'rollback':
       await cmdRollback(baseUrl, token, args['backup-file']);

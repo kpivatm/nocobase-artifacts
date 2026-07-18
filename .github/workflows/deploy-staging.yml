@@ -157,22 +157,19 @@ jobs:
         id: pre-backup
         # Skip for dry-run (nothing will be written, no rollback needed).
         # Hard-fail when backup is unavailable so apply never runs without a safety net.
+        # Saves the config bundle JSON to /tmp/pre_backup.json for use in rollback.
+        # No pg_dump / Backup Manager dependency — uses plugin-config-migration:backup.
         if: github.event.inputs.dry_run != 'true'
         run: |
-          set +e
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
-            backup --print-filename > /tmp/pre_backup_file.txt
-          BACKUP_EXIT=$?
-          set -e
-          BACKUP_FILE=$(tr -d '[:space:]' < /tmp/pre_backup_file.txt)
-          rm -f /tmp/pre_backup_file.txt
-          if [ $BACKUP_EXIT -ne 0 ] || [ -z "$BACKUP_FILE" ]; then
-            echo "ERROR: Pre-apply backup failed (exit $BACKUP_EXIT, filename='$BACKUP_FILE')."
+            backup --out /tmp/pre_backup.json
+          if [ ! -s /tmp/pre_backup.json ]; then
+            echo "ERROR: Pre-apply backup failed — /tmp/pre_backup.json is empty or missing."
             echo "Cannot proceed with apply without a valid backup."
             exit 1
           fi
-          echo "Pre-apply backup created: $BACKUP_FILE"
-          echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
+          echo "Pre-apply backup created: /tmp/pre_backup.json ($(wc -c < /tmp/pre_backup.json) bytes)"
+          echo "backup_file=/tmp/pre_backup.json" >> "$GITHUB_OUTPUT"
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
           NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
@@ -193,10 +190,12 @@ jobs:
           NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Auto-rollback on apply failure
+        # Re-applies the pre-apply bundle to restore Staging config state.
+        # No pg_dump / Backup Manager — uses plugin-config-migration:rollback.
         if: failure() && steps.pre-backup.outputs.backup_file != ''
         run: |
           BACKUP="${{ steps.pre-backup.outputs.backup_file }}"
-          echo "Apply failed — initiating rollback to backup: $BACKUP"
+          echo "Apply failed — initiating rollback from bundle: $BACKUP"
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
             rollback --backup-file "$BACKUP"
         env:

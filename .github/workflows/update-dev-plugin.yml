@@ -94,21 +94,6 @@ jobs:
           "$DOCKER_BIN" cp "$PLUGIN_DIR/bin/config-migration.js" "$CONTAINER:$DEST/bin/config-migration.js"
           echo "Plugin lib updated in container at $DEST"
 
-      - name: Install pg_dump in container (if missing)
-        run: |
-          CONTAINER="kpi-nocobase"
-          if "$DOCKER_BIN" exec "$CONTAINER" which pg_dump > /dev/null 2>&1; then
-            echo "pg_dump already installed"
-          else
-            echo "Installing postgresql-client..."
-            "$DOCKER_BIN" exec "$CONTAINER" sh -c "
-              apt-get update -qq 2>&1 | tail -3
-              apt-get install -y --no-install-recommends postgresql-client-16 2>&1 | tail -5 \
-                || apt-get install -y --no-install-recommends postgresql-client 2>&1 | tail -5
-            "
-            "$DOCKER_BIN" exec "$CONTAINER" which pg_dump && echo "pg_dump installed OK"
-          fi
-
       - name: Restart kpi-nocobase container
         run: |
           "$DOCKER_BIN" restart kpi-nocobase

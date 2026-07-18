@@ -509,15 +509,12 @@ function checkVersionCompat(source: Bundle, targetNocobaseVersion: string | unde
 
 // ─── Main apply ───────────────────────────────────────────────────────────────
 
-// App type used only for backup; loosely typed to avoid hard dependency.
-type NocoBaseApp = Parameters<typeof createBackup>[0];
-
 export async function applyBundle(
   db: Database,
   source: Bundle,
   config: MigrationConfig = {},
   dryRun = false,
-  app?: NocoBaseApp,
+  doBackup = true,
 ): Promise<ApplyResult> {
   const target = await exportBundle(db);
 
@@ -531,10 +528,10 @@ export async function applyBundle(
   let applied = 0;
   let skipped = 0;
 
-  // Stage 3: backup-before-apply
+  // Stage 3: pre-apply config backup (plugin-self, no pg_dump)
   let backupInfo: BackupInfo | undefined;
-  if (!dryRun && app) {
-    backupInfo = await createBackup(app);
+  if (!dryRun && doBackup) {
+    backupInfo = await createBackup(db);
   }
 
   const resultWarnings: string[] = [];

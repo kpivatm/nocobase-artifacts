@@ -2,20 +2,11 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
-import { createBackup, restoreBackup, BackupApiConfig } from './backup';
+import { createBackup, restoreFromBundle } from './backup';
+import type { Bundle } from './types';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
-
-// Extract BackupApiConfig from a Koa request context.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function backupConfig(ctx: any): BackupApiConfig {
-  const auth: string = ctx.headers?.authorization ?? '';
-  const token = auth.replace(/^Bearer\s+/i, '');
-  // ctx.origin = protocol + host (e.g. http://192.168.145.231:13000)
-  const baseUrl: string = ctx.origin ?? ctx.request?.origin ?? 'http://localhost:13000';
-  return { baseUrl, token };
-}
 
 export class PluginConfigMigrationServer extends Plugin {
   async load() {
@@ -40,12 +31,10 @@ export class PluginConfigMigrationServer extends Plugin {
         },
 
         // POST /api/plugin-config-migration:backup
-        // Response: BackupInfo { available, filename?, createdAt? }
-        // 200 + available=false when Backup Manager plugin is not installed (backup:create → 404).
-        // 200 + filename when backup succeeds.
-        // 500 when Backup Manager is installed but backup creation fails.
+        // Returns the current config bundle. Store it to use with rollback if needed.
+        // Response: { available: true, filename, createdAt, bundle: Bundle }
         backup: async (ctx, next) => {
-          const result = await createBackup(backupConfig(ctx));
+          const result = await createBackup(ctx.db);
           ctx.body = result;
           await next();
         },
@@ -66,7 +55,7 @@ export class PluginConfigMigrationServer extends Plugin {
 
         // POST /api/plugin-config-migration:apply
         // Body: { source: Bundle, dryRun?: boolean, migrationConfig?: MigrationConfig, backup?: boolean }
-        // Response includes backup.filename when backup=true and Backup Manager is available.
+        // Response includes backup.bundle when backup=true (use it with rollback on failure).
         apply: async (ctx, next) => {
           const { source, dryRun, migrationConfig, backup } = ctx.action!.params.values ?? {};
           if (!source) {
@@ -75,23 +64,24 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          const cfg = backup !== false ? backupConfig(ctx) : undefined;
-          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, cfg);
+          const doBackup = backup !== false;
+          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, doBackup);
           ctx.body = result;
           await next();
         },
 
         // POST /api/plugin-config-migration:rollback
-        // Body: { filename: string } — filename from a prior apply response's backup.filename
+        // Body: { bundle: Bundle } — the bundle returned by a prior backup or apply response
+        // Re-applies the saved bundle to restore the previous config state.
         rollback: async (ctx, next) => {
-          const { filename } = ctx.action!.params.values ?? {};
-          if (!filename) {
+          const { bundle } = ctx.action!.params.values ?? {};
+          if (!bundle) {
             ctx.status = 400;
-            ctx.body = { error: 'filename is required (from a prior apply backup.filename).' };
+            ctx.body = { error: 'bundle is required (from a prior backup or apply response backup.bundle).' };
             await next();
             return;
           }
-          const result = await restoreBackup(backupConfig(ctx), filename);
+          const result = await restoreFromBundle(ctx.db, bundle as Bundle);
           ctx.body = result;
           await next();
         },
