@@ -1,0 +1,67 @@
+name: Update dev plugin (one-shot)
+
+# One-shot workflow to update @kpi/plugin-config-migration on the dev Docker container.
+# Triggered manually; builds the plugin from the feature branch source and copies
+# the compiled lib/ into the running kpi-nocobase container, then restarts it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Source branch to build from'
+        required: true
+        default: 'feature/kpi-34-fixup'
+
+jobs:
+  update-dev:
+    name: Rebuild plugin and update dev container
+    runs-on: [self-hosted, kpivatm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install plugin dev dependencies
+        working-directory: packages/plugins/@kpi/plugin-config-migration
+        run: npm install --include=dev
+
+      - name: Build plugin
+        working-directory: packages/plugins/@kpi/plugin-config-migration
+        run: npm run build
+
+      - name: Copy lib/ into running container
+        run: |
+          PLUGIN_DIR="packages/plugins/@kpi/plugin-config-migration"
+          CONTAINER="kpi-nocobase"
+          DEST="/app/node_modules/@kpi/plugin-config-migration"
+          # Copy compiled lib and bin into container
+          docker cp "$PLUGIN_DIR/lib/." "$CONTAINER:$DEST/lib/"
+          docker cp "$PLUGIN_DIR/bin/config-migration.js" "$CONTAINER:$DEST/bin/config-migration.js"
+          docker cp "$PLUGIN_DIR/src/." "$CONTAINER:$DEST/src/"
+          echo "Plugin files updated in container"
+
+      - name: Restart kpi-nocobase container
+        working-directory: /home/bks/kpi/04-Source-Code/infrastructure/nocobase
+        run: |
+          docker compose restart kpi-nocobase
+          echo "Container restarted"
+
+      - name: Wait for NocoBase to be ready
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(curl -sf -m 5 'http://192.168.145.231:13000/api/auth:signIn' \
+              -H 'Content-Type: application/json' \
+              -d '{"account":"admin@nocobase.com","password":"Admin@2026"}' 2>/dev/null || true)
+            if echo "$STATUS" | grep -q '"token"'; then
+              echo "NocoBase is ready (attempt $i)"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 5
+          done
+          echo "WARNING: NocoBase did not become ready in time"
