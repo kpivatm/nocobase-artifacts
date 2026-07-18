@@ -44,23 +44,38 @@ jobs:
           test -f lib/server/plugin.js || (echo "ERROR: lib/server/plugin.js not built" && exit 1)
           echo "Server lib built OK"
 
+      - name: Locate docker binary and set DOCKER_BIN
+        run: |
+          DOCKER=$(which docker 2>/dev/null || true)
+          if [ -z "$DOCKER" ]; then
+            for p in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker; do
+              [ -x "$p" ] && DOCKER="$p" && break
+            done
+          fi
+          if [ -z "$DOCKER" ]; then
+            echo "ERROR: docker not found in PATH or known locations"
+            echo "PATH=$PATH"
+            exit 1
+          fi
+          echo "Docker found at: $DOCKER"
+          "$DOCKER" --version
+          echo "DOCKER_BIN=$DOCKER" >> "$GITHUB_ENV"
+
       - name: Find plugin path inside container
         id: plugin-path
         run: |
           CONTAINER="kpi-nocobase"
-          # Find where the plugin is installed in the container
-          # Try node_modules first, then storage/plugins
-          DEST=$(docker exec "$CONTAINER" sh -c "
+          DEST=$("$DOCKER_BIN" exec "$CONTAINER" sh -c '
             for d in \
               /app/node_modules/@kpi/plugin-config-migration \
               /app/storage/plugins/@kpi/plugin-config-migration \
               /app/packages/plugins/@kpi/plugin-config-migration; do
-              if [ -d \"\$d\" ]; then echo \"\$d\"; break; fi;
+              [ -d "$d" ] && echo "$d" && break
             done
-          ")
+          ')
           if [ -z "$DEST" ]; then
-            echo "ERROR: Could not find plugin in container"
-            docker exec "$CONTAINER" find /app -name 'plugin-config-migration' -type d 2>/dev/null | head -5
+            echo "ERROR: Could not find plugin in container — searching..."
+            "$DOCKER_BIN" exec "$CONTAINER" find /app -name 'plugin-config-migration' -maxdepth 6 -type d 2>/dev/null | head -10
             exit 1
           fi
           echo "Plugin found at: $DEST"
@@ -72,29 +87,30 @@ jobs:
           DEST="${{ steps.plugin-path.outputs.dest }}"
           PLUGIN_DIR="packages/plugins/@kpi/plugin-config-migration"
           # Ensure target dirs exist
-          docker exec "$CONTAINER" mkdir -p "$DEST/lib/server" "$DEST/lib/client-v2" "$DEST/bin"
-          # Copy server lib (the only files that changed)
-          docker cp "$PLUGIN_DIR/lib/server/." "$CONTAINER:$DEST/lib/server/"
-          docker cp "$PLUGIN_DIR/bin/config-migration.js" "$CONTAINER:$DEST/bin/config-migration.js"
+          "$DOCKER_BIN" exec "$CONTAINER" mkdir -p "$DEST/lib/server" "$DEST/bin"
+          # Copy server lib and bin (only changed files)
+          "$DOCKER_BIN" cp "$PLUGIN_DIR/lib/server/." "$CONTAINER:$DEST/lib/server/"
+          "$DOCKER_BIN" cp "$PLUGIN_DIR/bin/config-migration.js" "$CONTAINER:$DEST/bin/config-migration.js"
           echo "Plugin lib updated in container at $DEST"
 
       - name: Install pg_dump in container (if missing)
         run: |
           CONTAINER="kpi-nocobase"
-          if docker exec "$CONTAINER" which pg_dump > /dev/null 2>&1; then
+          if "$DOCKER_BIN" exec "$CONTAINER" which pg_dump > /dev/null 2>&1; then
             echo "pg_dump already installed"
           else
             echo "Installing postgresql-client..."
-            docker exec "$CONTAINER" sh -c "
-              apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client-16 2>&1 \
-              || apt-get install -y --no-install-recommends postgresql-client 2>&1
+            "$DOCKER_BIN" exec "$CONTAINER" sh -c "
+              apt-get update -qq 2>&1 | tail -3
+              apt-get install -y --no-install-recommends postgresql-client-16 2>&1 | tail -5 \
+                || apt-get install -y --no-install-recommends postgresql-client 2>&1 | tail -5
             "
-            docker exec "$CONTAINER" which pg_dump && echo "pg_dump installed OK"
+            "$DOCKER_BIN" exec "$CONTAINER" which pg_dump && echo "pg_dump installed OK"
           fi
 
       - name: Restart kpi-nocobase container
         run: |
-          docker restart kpi-nocobase
+          "$DOCKER_BIN" restart kpi-nocobase
           echo "Container restart triggered"
 
       - name: Wait for NocoBase to be ready
@@ -110,7 +126,7 @@ jobs:
             sleep 5
           done
 
-      - name: Run smoke test — backup command
+      - name: Run smoke test — backup and export
         run: |
           PLUGIN_DIR="packages/plugins/@kpi/plugin-config-migration"
           NOCOBASE_URL="http://192.168.145.231:13000"
@@ -127,10 +143,12 @@ jobs:
           echo "=== Smoke test: export ==="
           NOCOBASE_URL="$NOCOBASE_URL" NOCOBASE_API_TOKEN="$TOKEN" \
             node "$PLUGIN_DIR/bin/config-migration.js" export 2>&1 | \
-            node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
-              const r=JSON.parse(d);
-              console.log('Export OK — version:',r.version,'collections:',r.collections?.length,'workflows:',r.workflows?.length);
-            });"
+            node -e "
+              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                const r=JSON.parse(d);
+                console.log('Export OK — version:',r.version,'collections:',r.collections?.length,'workflows:',r.workflows?.length);
+              });
+            "
         env:
           DEV_EMAIL: ${{ secrets.DEV_NOCOBASE_EMAIL }}
           DEV_PASSWORD: ${{ secrets.DEV_NOCOBASE_PASSWORD }}
