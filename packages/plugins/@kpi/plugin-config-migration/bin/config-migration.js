@@ -5,7 +5,7 @@
  * Usage:
  *   config-migration export   [--url <base>] [--token <api-token>] [--out <file>]
  *   config-migration diff     [--url <base>] [--token <api-token>] --source <file>
- *   config-migration backup   [--url <base>] [--token <api-token>]
+ *   config-migration backup   [--url <base>] [--token <api-token>] [--print-filename]
  *   config-migration apply    [--url <base>] [--token <api-token>] --source <file> [--dry-run] [--no-backup] [--config <config-file>]
  *   config-migration rollback [--url <base>] [--token <api-token>] --backup-file <filename>
  *
@@ -151,12 +151,23 @@ async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, configFile
   if (hasErrors) process.exitCode = 1;
 }
 
-async function cmdBackup(baseUrl, token) {
+async function cmdBackup(baseUrl, token, printFilename) {
   const result = await apiPost(baseUrl, token, 'backup', {});
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  if (!result.filename) {
-    process.stderr.write('Warning: backup response did not include filename\n');
-    process.exitCode = 1;
+  if (printFilename) {
+    // For CI scripts: print just the filename on stdout, exit 1 when unavailable or no filename.
+    process.stdout.write((result.filename || '') + '\n');
+    if (!result.available || !result.filename) {
+      process.exitCode = 1;
+    }
+  } else {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    if (!result.available) {
+      process.stderr.write('Info: Backup Manager plugin (@nocobase/plugin-backup-restore) is not installed on this instance.\n');
+      process.exitCode = 1;
+    } else if (!result.filename) {
+      process.stderr.write('Warning: backup succeeded but returned no filename.\n');
+      process.exitCode = 1;
+    }
   }
 }
 
@@ -189,7 +200,7 @@ async function main() {
       await cmdDiff(baseUrl, token, args['source']);
       break;
     case 'backup':
-      await cmdBackup(baseUrl, token);
+      await cmdBackup(baseUrl, token, args['print-filename']);
       break;
     case 'apply':
       await cmdApply(baseUrl, token, args['source'], args['dry-run'], args['no-backup'], args['config']);

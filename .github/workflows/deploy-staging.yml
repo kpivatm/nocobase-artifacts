@@ -40,10 +40,9 @@ jobs:
 
       - name: Authenticate to Dev instance
         id: auth-dev
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          # Use jq+stdin so password never appears in process argv (security fix)
-          TOKEN=$(jq -n --arg a "$DEV_EMAIL" --arg p "$DEV_PASSWORD" \
-              '{account:$a,password:$p}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.DEV_EMAIL,password:process.env.DEV_PASSWORD}))" \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
               "$DEV_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
@@ -76,10 +75,9 @@ jobs:
 
       - name: Authenticate to Staging instance
         id: auth-staging
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          # Use jq+stdin so password never appears in process argv (security fix)
-          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" \
-              '{account:$a,password:$p}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.STAGING_EMAIL,password:process.env.STAGING_PASSWORD}))" \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
               "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
@@ -138,10 +136,9 @@ jobs:
 
       - name: Authenticate to Staging instance
         id: auth
+        # node reads credentials from env vars — password never appears in process argv
         run: |
-          # Use jq+stdin so password never appears in process argv (security fix)
-          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" \
-              '{account:$a,password:$p}' \
+          TOKEN=$(node -e "process.stdout.write(JSON.stringify({account:process.env.STAGING_EMAIL,password:process.env.STAGING_PASSWORD}))" \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' \
               "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
@@ -158,16 +155,23 @@ jobs:
 
       - name: Pre-apply backup
         id: pre-backup
-        # Create a backup independently before apply so rollback has a filename
-        # even when the apply call itself fails (HTTP 500 → CLI throws → no JSON result).
+        # Skip for dry-run (nothing will be written, no rollback needed).
+        # Hard-fail when backup is unavailable so apply never runs without a safety net.
+        if: github.event.inputs.dry_run != 'true'
         run: |
-          BACKUP_FILE=$(node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
-            backup | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('filename',''))" 2>/dev/null || echo "")
-          if [ -z "$BACKUP_FILE" ]; then
-            echo "WARNING: Pre-apply backup did not return a filename; rollback will be skipped on failure."
-          else
-            echo "Pre-apply backup created: $BACKUP_FILE"
+          set +e
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            backup --print-filename > /tmp/pre_backup_file.txt
+          BACKUP_EXIT=$?
+          set -e
+          BACKUP_FILE=$(tr -d '[:space:]' < /tmp/pre_backup_file.txt)
+          rm -f /tmp/pre_backup_file.txt
+          if [ $BACKUP_EXIT -ne 0 ] || [ -z "$BACKUP_FILE" ]; then
+            echo "ERROR: Pre-apply backup failed (exit $BACKUP_EXIT, filename='$BACKUP_FILE')."
+            echo "Cannot proceed with apply without a valid backup."
+            exit 1
           fi
+          echo "Pre-apply backup created: $BACKUP_FILE"
           echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
@@ -181,7 +185,7 @@ jobs:
             DRY_RUN_FLAG="--dry-run"
             echo "Dry-run mode — no changes will be written."
           fi
-          # --no-backup: backup was already taken in the pre-backup step above
+          # --no-backup: backup was taken in pre-backup step (skipped for dry-run, no-op there)
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
             apply --source /tmp/bundle.json --no-backup $DRY_RUN_FLAG
         env:

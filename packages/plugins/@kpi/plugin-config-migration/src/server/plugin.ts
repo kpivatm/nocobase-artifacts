@@ -2,7 +2,7 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
-import { restoreBackup } from './backup';
+import { createBackup, restoreBackup } from './backup';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
@@ -29,6 +29,18 @@ export class PluginConfigMigrationServer extends Plugin {
         export: async (ctx, next) => {
           const bundle = await exportBundle(ctx.db);
           ctx.body = bundle;
+          await next();
+        },
+
+        // POST /api/plugin-config-migration:backup
+        // Response: BackupInfo { available, filename?, createdAt? }
+        // 200 + available=false when Backup Manager plugin is not installed.
+        // 200 + filename when backup succeeds.
+        // 500 when Backup Manager is installed but backup creation fails.
+        backup: async (ctx, next) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await createBackup(plugin.app as any);
+          ctx.body = result;
           await next();
         },
 
@@ -84,11 +96,12 @@ export class PluginConfigMigrationServer extends Plugin {
 
     this.app.acl.allow(PLUGIN_NAME, 'status', 'loggedIn');
     this.app.acl.allow(PLUGIN_NAME, 'diff', 'loggedIn');
-    // export, apply, rollback — DDL-level operations, admin only
+    // export, backup, apply, rollback — DDL-level operations, admin only
     this.app.acl.registerSnippet({
       name: `pm.${PLUGIN_NAME}`,
       actions: [
         `${PLUGIN_NAME}:export`,
+        `${PLUGIN_NAME}:backup`,
         `${PLUGIN_NAME}:apply`,
         `${PLUGIN_NAME}:rollback`,
       ],
