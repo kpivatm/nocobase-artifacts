@@ -41,8 +41,9 @@ jobs:
       - name: Authenticate to Dev instance
         id: auth-dev
         run: |
-          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
-          TOKEN=$(jq -n --arg a "$DEV_EMAIL" --arg p "$DEV_PASSWORD" '{"account":$a,"password":$p}' \
+          # Build JSON with node reading from env (not argv) so password is never
+          # visible in /proc/<pid>/cmdline on the self-hosted runner.
+          TOKEN=$(node -e 'process.stdout.write(JSON.stringify({account:process.env.NB_EMAIL,password:process.env.NB_PASSWORD}))' \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$DEV_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
@@ -53,8 +54,8 @@ jobs:
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
         env:
           DEV_URL: ${{ secrets.DEV_NOCOBASE_URL }}
-          DEV_EMAIL: ${{ secrets.DEV_NOCOBASE_EMAIL }}
-          DEV_PASSWORD: ${{ secrets.DEV_NOCOBASE_PASSWORD }}
+          NB_EMAIL: ${{ secrets.DEV_NOCOBASE_EMAIL }}
+          NB_PASSWORD: ${{ secrets.DEV_NOCOBASE_PASSWORD }}
 
       - name: Export config bundle from Dev
         run: |
@@ -75,8 +76,9 @@ jobs:
       - name: Authenticate to Staging instance
         id: auth-staging
         run: |
-          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
-          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" '{"account":$a,"password":$p}' \
+          # Build JSON with node reading from env (not argv) so password is never
+          # visible in /proc/<pid>/cmdline on the self-hosted runner.
+          TOKEN=$(node -e 'process.stdout.write(JSON.stringify({account:process.env.NB_EMAIL,password:process.env.NB_PASSWORD}))' \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
@@ -87,8 +89,8 @@ jobs:
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
         env:
           STAGING_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
-          STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
+          NB_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          NB_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
       - name: Diff bundle against Staging
         id: diff
@@ -134,8 +136,9 @@ jobs:
       - name: Authenticate to Staging instance
         id: auth
         run: |
-          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
-          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" '{"account":$a,"password":$p}' \
+          # Build JSON with node reading from env (not argv) so password is never
+          # visible in /proc/<pid>/cmdline on the self-hosted runner.
+          TOKEN=$(node -e 'process.stdout.write(JSON.stringify({account:process.env.NB_EMAIL,password:process.env.NB_PASSWORD}))' \
             | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
@@ -146,8 +149,8 @@ jobs:
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
         env:
           STAGING_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
-          STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
+          NB_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
+          NB_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
       - name: Create backup before apply
         # Run backup as a dedicated step so the filename is captured in $GITHUB_OUTPUT
