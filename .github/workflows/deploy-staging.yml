@@ -41,9 +41,9 @@ jobs:
       - name: Authenticate to Dev instance
         id: auth-dev
         run: |
-          TOKEN=$(curl -sf -m 10 "$DEV_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$DEV_EMAIL"'","password":"'"$DEV_PASSWORD"'"}' \
+          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
+          TOKEN=$(jq -n --arg a "$DEV_EMAIL" --arg p "$DEV_PASSWORD" '{"account":$a,"password":$p}' \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$DEV_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Dev instance at $DEV_URL"
@@ -75,9 +75,9 @@ jobs:
       - name: Authenticate to Staging instance
         id: auth-staging
         run: |
-          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
+          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" '{"account":$a,"password":$p}' \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
@@ -119,6 +119,7 @@ jobs:
   apply-staging:
     name: Apply to Staging
     needs: export-and-diff
+    if: needs.export-and-diff.outputs.has_changes == 'true'
     runs-on: [self-hosted, kpivatm]
     environment: staging
     steps:
@@ -133,9 +134,9 @@ jobs:
       - name: Authenticate to Staging instance
         id: auth
         run: |
-          TOKEN=$(curl -sf -m 10 "$STAGING_URL/api/auth:signIn" \
-            -H "Content-Type: application/json" \
-            -d '{"account":"'"$STAGING_EMAIL"'","password":"'"$STAGING_PASSWORD"'"}' \
+          # Use jq + stdin to build JSON so password never appears in process argv (self-hosted runner risk).
+          TOKEN=$(jq -n --arg a "$STAGING_EMAIL" --arg p "$STAGING_PASSWORD" '{"account":$a,"password":$p}' \
+            | curl -sf -m 10 --data @- -H 'Content-Type: application/json' "$STAGING_URL/api/auth:signIn" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
           if [ -z "$TOKEN" ]; then
             echo "ERROR: Failed to authenticate to Staging instance at $STAGING_URL"
@@ -148,7 +149,33 @@ jobs:
           STAGING_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
           STAGING_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
 
-      - name: Apply config to Staging (backup-before-apply)
+      - name: Create backup before apply
+        # Run backup as a dedicated step so the filename is captured in $GITHUB_OUTPUT
+        # independently of whether apply succeeds or fails. When apply throws (server 500),
+        # the apply step cannot return JSON, so we cannot parse backup_file from its output.
+        # Skipped for dry-run because no data is written and no rollback can be needed.
+        id: backup
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          RESULT=$(node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            backup 2>&1)
+          echo "$RESULT"
+          BACKUP_FILE=$(echo "$RESULT" | \
+            node -e "let d=''; process.stdin.on('data',c=>d+=c); \
+              process.stdin.on('end',()=>{ \
+                try { const r=JSON.parse(d); \
+                  console.log(r.filename||''); \
+                } catch { console.log(''); } \
+              });" 2>/dev/null || echo "")
+          if [ -z "$BACKUP_FILE" ]; then
+            echo "WARNING: Backup did not return a filename — rollback will not be available if apply fails."
+          fi
+          echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Apply config to Staging
         id: apply
         run: |
           DRY_RUN_FLAG=""
@@ -157,33 +184,17 @@ jobs:
             echo "Dry-run mode — no changes will be written."
           fi
 
-          # Capture output even on failure so we can extract the backup filename for rollback
-          set +e
-          RESULT=$(node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
-            apply --source /tmp/bundle.json $DRY_RUN_FLAG 2>&1)
-          APPLY_EXIT=$?
-
-          echo "$RESULT"
-
-          # Extract backup filename from the JSON result for auto-rollback
-          BACKUP_FILE=$(echo "$RESULT" | \
-            node -e "let d=''; process.stdin.on('data',c=>d+=c); \
-              process.stdin.on('end',()=>{ \
-                try { const r=JSON.parse(d); \
-                  console.log((r.data||r).backup?.filename||''); \
-                } catch { console.log(''); } \
-              });" 2>/dev/null || echo "")
-
-          echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
-          exit $APPLY_EXIT
+          # --no-backup: backup was already created in the dedicated step above.
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            apply --source /tmp/bundle.json $DRY_RUN_FLAG --no-backup
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
           NOCOBASE_API_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Auto-rollback on apply failure
-        if: failure() && steps.apply.outputs.backup_file != ''
+        if: failure() && steps.backup.outputs.backup_file != ''
         run: |
-          BACKUP="${{ steps.apply.outputs.backup_file }}"
+          BACKUP="${{ steps.backup.outputs.backup_file }}"
           echo "Apply failed — initiating rollback to backup: $BACKUP"
           node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
             rollback --backup-file "$BACKUP"

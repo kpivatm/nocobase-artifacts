@@ -2,7 +2,7 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
-import { restoreBackup } from './backup';
+import { createBackup, restoreBackup } from './backup';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
@@ -64,8 +64,18 @@ export class PluginConfigMigrationServer extends Plugin {
           await next();
         },
 
+        // POST /api/plugin-config-migration:backup
+        // Creates a full backup via Backup Manager. Returns BackupInfo.
+        // Call this before apply so the filename is available even if apply fails.
+        backup: async (ctx, next) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await createBackup(plugin.app as any);
+          ctx.body = result;
+          await next();
+        },
+
         // POST /api/plugin-config-migration:rollback
-        // Body: { filename: string } — filename from a prior apply response's backup.filename
+        // Body: { filename: string } — filename from a prior backup or apply response's backup.filename
         rollback: async (ctx, next) => {
           const { filename } = ctx.action!.params.values ?? {};
           if (!filename) {
@@ -89,6 +99,7 @@ export class PluginConfigMigrationServer extends Plugin {
       name: `pm.${PLUGIN_NAME}`,
       actions: [
         `${PLUGIN_NAME}:export`,
+        `${PLUGIN_NAME}:backup`,
         `${PLUGIN_NAME}:apply`,
         `${PLUGIN_NAME}:rollback`,
       ],

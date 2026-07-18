@@ -5,6 +5,7 @@
  * Usage:
  *   config-migration export   [--url <base>] [--token <api-token>] [--out <file>]
  *   config-migration diff     [--url <base>] [--token <api-token>] --source <file>
+ *   config-migration backup   [--url <base>] [--token <api-token>]
  *   config-migration apply    [--url <base>] [--token <api-token>] --source <file> [--dry-run] [--no-backup] [--config <config-file>]
  *   config-migration rollback [--url <base>] [--token <api-token>] --backup-file <filename>
  *
@@ -150,6 +151,15 @@ async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, configFile
   if (hasErrors) process.exitCode = 1;
 }
 
+async function cmdBackup(baseUrl, token) {
+  const result = await apiPost(baseUrl, token, 'backup', {});
+  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  if (!result.available) {
+    process.stderr.write('Warning: Backup Manager plugin not available on this instance\n');
+    process.exitCode = 1;
+  }
+}
+
 async function cmdRollback(baseUrl, token, backupFile) {
   if (!backupFile) throw new Error('--backup-file <filename> is required for rollback');
   const result = await apiPost(baseUrl, token, 'rollback', { filename: backupFile });
@@ -166,7 +176,7 @@ async function main() {
   const token = args['token'] || process.env.NOCOBASE_API_TOKEN || '';
 
   if (!command) {
-    process.stderr.write('Usage: config-migration <export|diff|apply|rollback> [options]\n');
+    process.stderr.write('Usage: config-migration <export|diff|backup|apply|rollback> [options]\n');
     process.exitCode = 1;
     return;
   }
@@ -177,6 +187,9 @@ async function main() {
       break;
     case 'diff':
       await cmdDiff(baseUrl, token, args['source']);
+      break;
+    case 'backup':
+      await cmdBackup(baseUrl, token);
       break;
     case 'apply':
       await cmdApply(baseUrl, token, args['source'], args['dry-run'], args['no-backup'], args['config']);
