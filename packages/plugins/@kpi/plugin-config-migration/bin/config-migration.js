@@ -95,14 +95,16 @@ async function apiPost(baseUrl, token, action, payload) {
     const err = (res.body && res.body.error) ? res.body.error : JSON.stringify(res.body);
     throw new Error(`API error ${res.status}: ${err}`);
   }
-  return res.body;
+  // NocoBase wraps successful responses in {"data": ...}; unwrap so callers get the payload directly.
+  const body = res.body;
+  return (body && typeof body === 'object' && 'data' in body) ? body.data : body;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 async function cmdExport(baseUrl, token, outFile) {
-  const result = await apiPost(baseUrl, token, 'export', {});
-  const json = JSON.stringify(result, null, 2);
+  const bundle = await apiPost(baseUrl, token, 'export', {});
+  const json = JSON.stringify(bundle, null, 2);
   if (outFile) {
     fs.writeFileSync(path.resolve(outFile), json, 'utf8');
     process.stderr.write(`Bundle exported to ${outFile}\n`);
@@ -111,9 +113,15 @@ async function cmdExport(baseUrl, token, outFile) {
   }
 }
 
+function readBundle(filePath) {
+  const raw = JSON.parse(fs.readFileSync(path.resolve(filePath), 'utf8'));
+  // Handle files written by older CLI versions that saved the {"data": ...} wrapper.
+  return (raw && typeof raw === 'object' && 'data' in raw && !Array.isArray(raw.data)) ? raw.data : raw;
+}
+
 async function cmdDiff(baseUrl, token, sourceFile) {
   if (!sourceFile) throw new Error('--source <file> is required for diff');
-  const source = JSON.parse(fs.readFileSync(path.resolve(sourceFile), 'utf8'));
+  const source = readBundle(sourceFile);
   const target = await apiPost(baseUrl, token, 'export', {});
   const result = await apiPost(baseUrl, token, 'diff', { source, target });
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -125,7 +133,7 @@ async function cmdDiff(baseUrl, token, sourceFile) {
 
 async function cmdApply(baseUrl, token, sourceFile, dryRun, noBackup, configFile) {
   if (!sourceFile) throw new Error('--source <file> is required for apply');
-  const source = JSON.parse(fs.readFileSync(path.resolve(sourceFile), 'utf8'));
+  const source = readBundle(sourceFile);
   let migrationConfig = {};
   if (configFile) {
     migrationConfig = JSON.parse(fs.readFileSync(path.resolve(configFile), 'utf8'));
