@@ -46,19 +46,25 @@ jobs:
 
       - name: Locate docker binary and set DOCKER_BIN
         run: |
+          echo "PATH=$PATH"
+          echo "whoami=$(whoami)"
+          # Broad search for docker binary
           DOCKER=$(which docker 2>/dev/null || true)
           if [ -z "$DOCKER" ]; then
-            for p in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker; do
-              [ -x "$p" ] && DOCKER="$p" && break
-            done
+            DOCKER=$(find /usr /home /opt /snap /root /var -name 'docker' -type f -perm /0111 2>/dev/null | grep -v compose | head -1 || true)
+          fi
+          # Also try sudo docker if available
+          if [ -z "$DOCKER" ] && sudo -n docker --version > /dev/null 2>&1; then
+            DOCKER="sudo docker"
           fi
           if [ -z "$DOCKER" ]; then
-            echo "ERROR: docker not found in PATH or known locations"
-            echo "PATH=$PATH"
+            echo "ERROR: docker not found. Listing potential locations:"
+            ls /usr/bin/docker* /usr/local/bin/docker* /snap/bin/docker* 2>/dev/null || true
+            ls -la /var/run/docker.sock 2>/dev/null || echo "No docker socket"
             exit 1
           fi
-          echo "Docker found at: $DOCKER"
-          "$DOCKER" --version
+          echo "Docker found: $DOCKER"
+          $DOCKER --version
           echo "DOCKER_BIN=$DOCKER" >> "$GITHUB_ENV"
 
       - name: Find plugin path inside container
