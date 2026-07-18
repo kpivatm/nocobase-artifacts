@@ -585,3 +585,113 @@ describe('applyBundle — Stage 3: backup-before-apply', () => {
     expect(result.backup?.available).toBe(false);
   });
 });
+
+// ─── Stage 3: [REDACTED] sentinel must never be written to DB ────────────────
+
+describe('applyBundle — Stage 3: redaction-safe apply', () => {
+  it('update flow_node with [REDACTED] secret + cron change: target keeps real secret', async () => {
+    // Scenario: bundle was exported after redaction pass. Node "n1" in "wf-a" has:
+    //   - config.apiKey = '[REDACTED]' (was a real token, redacted at export)
+    //   - config.cron changed from '0 * * * *' to '0 0 * * *' (legitimate change)
+    //
+    // Target DB has the real token for apiKey. After apply, the update must:
+    //   - Write the new cron value
+    //   - Preserve the real apiKey from the target, NOT write '[REDACTED]'
+
+    const existingWf = { id: 10, key: 'wf-a', title: 'WF A', type: 'schedule', enabled: true,
+      config: {} };
+    const existingNode = {
+      id: 20, key: 'n1', workflowId: 10, workflowKey: 'wf-a', type: 'request',
+      upstreamKey: null, branchIndex: null,
+      config: { apiKey: 'REAL_SECRET_TOKEN_123', cron: '0 * * * *' },
+    };
+
+    const updateFn = jest.fn().mockResolvedValue({});
+    const { db, commitFn } = makeMockDb({
+      workflowsFind: [existingWf],
+      flowNodesFind: [existingNode],
+      updateFn,
+    });
+
+    // Source bundle: exported with redacted apiKey + updated cron
+    const source = makeBundle({
+      workflows: [{
+        key: 'wf-a', title: 'WF A', type: 'schedule', enabled: true,
+        config: {},
+        nodes: [{
+          key: 'n1', workflowKey: 'wf-a', type: 'request',
+          upstreamKey: null, branchIndex: null,
+          config: { apiKey: '[REDACTED]', cron: '0 0 * * *' }, // cron changed, apiKey redacted
+        }],
+      }],
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+    expect(commitFn).toHaveBeenCalled();
+
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-a.n1');
+    expect(nodeEntry?.status).toBe('ok');
+
+    // Find the update call for flow_nodes repo
+    const nodeUpdateCall = updateFn.mock.calls.find((call: unknown[]) => {
+      const opts = call[0] as Record<string, unknown>;
+      const filter = opts.filter as Record<string, unknown> | undefined;
+      return filter?.key === 'n1';
+    });
+    expect(nodeUpdateCall).toBeDefined();
+    const writtenValues = (nodeUpdateCall![0] as Record<string, unknown>).values as Record<string, unknown>;
+    const writtenConfig = writtenValues.config as Record<string, unknown>;
+
+    // The real secret must be preserved (not overwritten with [REDACTED])
+    expect(writtenConfig.apiKey).toBe('REAL_SECRET_TOKEN_123');
+    // The non-secret change must be applied
+    expect(writtenConfig.cron).toBe('0 0 * * *');
+    // [REDACTED] literal must never appear in DB
+    expect(writtenConfig.apiKey).not.toBe('[REDACTED]');
+  });
+
+  it('add flow_node with [REDACTED] secret: sentinel key is stripped (not written to DB)', async () => {
+    // On add (not update), there is no target row to preserve from. Sentinel keys are stripped
+    // entirely so the node is created without the credential field (operator must fill it in).
+
+    const existingWf = { id: 10, key: 'wf-b', title: 'WF B', type: 'manual', enabled: true, config: {} };
+    const createFn = jest.fn().mockResolvedValue({ id: 99 });
+    const { db } = makeMockDb({
+      workflowsFind: [existingWf],
+      flowNodesFind: [], // no existing nodes
+      createFn,
+    });
+
+    const source = makeBundle({
+      workflows: [{
+        key: 'wf-b', title: 'WF B', type: 'manual', enabled: true,
+        config: {},
+        nodes: [{
+          key: 'node-new', workflowKey: 'wf-b', type: 'request',
+          upstreamKey: null, branchIndex: null,
+          config: { apiKey: '[REDACTED]', url: 'https://api.example.com' },
+        }],
+      }],
+    });
+
+    const result = await applyBundle(db, source, {}, false);
+
+    const nodeEntry = result.entries.find((e) => e.key === 'wf-b.node-new');
+    expect(nodeEntry?.status).toBe('ok');
+
+    // Find the node create call
+    const nodeCreateCall = createFn.mock.calls.find((call: unknown[]) => {
+      const opts = call[0] as Record<string, unknown>;
+      const values = opts.values as Record<string, unknown> | undefined;
+      return values?.key === 'node-new';
+    });
+    expect(nodeCreateCall).toBeDefined();
+    const createdValues = (nodeCreateCall![0] as Record<string, unknown>).values as Record<string, unknown>;
+    const createdConfig = createdValues.config as Record<string, unknown>;
+
+    // Sentinel key must be stripped — not written to DB
+    expect(Object.prototype.hasOwnProperty.call(createdConfig, 'apiKey')).toBe(false);
+    // Non-sensitive fields preserved
+    expect(createdConfig.url).toBe('https://api.example.com');
+  });
+});

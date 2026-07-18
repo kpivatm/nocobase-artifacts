@@ -16,6 +16,70 @@ import type {
   WorkflowSnapshot,
 } from './types';
 
+// ─── Redaction-aware config helpers ──────────────────────────────────────────
+// Export redacts known-sensitive keys with this sentinel. Apply must never write
+// the sentinel back to the DB: on add, drop redacted keys; on update, preserve
+// the target's existing value for any key whose source value is the sentinel.
+
+const REDACTED_SENTINEL = '[REDACTED]';
+
+function hasRedactedValues(v: unknown): boolean {
+  if (v === REDACTED_SENTINEL) return true;
+  if (Array.isArray(v)) return v.some(hasRedactedValues);
+  if (v !== null && typeof v === 'object') {
+    return Object.values(v as Record<string, unknown>).some(hasRedactedValues);
+  }
+  return false;
+}
+
+function stripRedactedFromConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (v === REDACTED_SENTINEL) continue;
+    if (Array.isArray(v)) {
+      result[k] = v.map(item =>
+        item !== null && typeof item === 'object' && !Array.isArray(item)
+          ? stripRedactedFromConfig(item as Record<string, unknown>)
+          : item,
+      );
+    } else if (v !== null && typeof v === 'object') {
+      result[k] = stripRedactedFromConfig(v as Record<string, unknown>);
+    } else {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
+function mergePreservingRedacted(
+  sourceConfig: Record<string, unknown>,
+  targetConfig: Record<string, unknown>,
+): Record<string, unknown> {
+  // For update: where source has [REDACTED] (scalar or array containing it),
+  // keep the target's existing value so real credentials are never overwritten.
+  const result = { ...targetConfig };
+  for (const [k, sv] of Object.entries(sourceConfig)) {
+    if (sv === REDACTED_SENTINEL) {
+      // Keep result[k] from target
+      continue;
+    }
+    if (Array.isArray(sv)) {
+      // If source array contains any [REDACTED] at any depth, keep target array
+      result[k] = hasRedactedValues(sv) ? (result[k] ?? sv) : sv;
+    } else if (sv !== null && typeof sv === 'object') {
+      const tv = result[k];
+      if (tv !== null && typeof tv === 'object' && !Array.isArray(tv)) {
+        result[k] = mergePreservingRedacted(sv as Record<string, unknown>, tv as Record<string, unknown>);
+      } else {
+        result[k] = stripRedactedFromConfig(sv as Record<string, unknown>);
+      }
+    } else {
+      result[k] = sv;
+    }
+  }
+  return result;
+}
+
 // ─── Rule helpers ─────────────────────────────────────────────────────────────
 
 function parentDomainKey(entry: DiffEntry): string | null {
@@ -120,7 +184,7 @@ async function applyWorkflowNodes(
         workflowId,
         type: node.type,
         title: node.title ?? null,
-        config: node.config ?? {},
+        config: stripRedactedFromConfig(node.config ?? {}),
         branchIndex: node.branchIndex ?? null,
         upstreamId,
       },
@@ -143,7 +207,7 @@ async function applyWorkflowAdd(
       title: wf.title,
       type: wf.type,
       triggerType: wf.triggerType,
-      config: wf.config ?? {},
+      config: stripRedactedFromConfig(wf.config ?? {}),
       enabled: wf.enabled,
       description: wf.description ?? null,
     },
@@ -159,6 +223,7 @@ async function applyWorkflowUpdate(
   db: Database,
   wf: WorkflowSnapshot,
   txOpt: Record<string, unknown>,
+  targetConfig: Record<string, unknown>,
 ): Promise<void> {
   const workflowsRepo = db.getRepository('workflows');
   await workflowsRepo.update({
@@ -167,7 +232,7 @@ async function applyWorkflowUpdate(
       title: wf.title,
       type: wf.type,
       triggerType: wf.triggerType,
-      config: wf.config ?? {},
+      config: mergePreservingRedacted(wf.config ?? {}, targetConfig),
       enabled: wf.enabled,
       description: wf.description ?? null,
     },
@@ -209,7 +274,7 @@ async function addNodeToExistingWorkflow(
       workflowId: wfId,
       type: src.type,
       title: src.title ?? null,
-      config: src.config ?? {},
+      config: stripRedactedFromConfig(src.config ?? {}),
       branchIndex: src.branchIndex ?? null,
       upstreamId,
     },
@@ -341,7 +406,8 @@ async function applyEntry(
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await applyWorkflowAdd(db, src, txOpt);
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
-      await applyWorkflowUpdate(db, src, txOpt);
+      const tgt = entry.target as WorkflowSnapshot | undefined;
+      await applyWorkflowUpdate(db, src, txOpt, tgt?.config ?? {});
     }
     return { status: 'ok' };
   }
@@ -360,12 +426,13 @@ async function applyEntry(
       const wfRows = await db.getRepository('workflows').find({ filter: { key: src.workflowKey }, ...txOpt });
       const wfId = wfRows.length > 0 ? (wfRows[0] as unknown as Record<string, unknown>).id as number : null;
       if (wfId == null) return { status: 'skipped', warning: `Parent workflow "${src.workflowKey}" not found` };
+      const tgt = entry.target as FlowNodeSnapshot | undefined;
       await repo.update({
         filter: { key: src.key, workflowId: wfId },
         values: {
           type: src.type,
           title: src.title ?? null,
-          config: src.config ?? {},
+          config: mergePreservingRedacted(src.config ?? {}, tgt?.config ?? {}),
           branchIndex: src.branchIndex ?? null,
         },
         ...txOpt,
