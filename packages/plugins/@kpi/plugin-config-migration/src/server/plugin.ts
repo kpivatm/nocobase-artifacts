@@ -3,6 +3,7 @@ import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
 import { restoreBackup } from './backup';
+import type { NocoBaseApp } from './backup';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
@@ -57,8 +58,7 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const app = backup !== false ? (plugin.app as any) : undefined;
+          const app = backup !== false ? (plugin.app as NocoBaseApp) : undefined;
           const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, app);
           ctx.body = result;
           await next();
@@ -74,8 +74,7 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await restoreBackup(plugin.app as any, filename);
+          const result = await restoreBackup(plugin.app as NocoBaseApp, filename);
           ctx.body = result;
           await next();
         },

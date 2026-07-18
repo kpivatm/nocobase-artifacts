@@ -148,8 +148,8 @@ function sanitizeNode(
 }
 
 async function exportWorkflows(db: Database, redactedRef: { value: boolean }): Promise<WorkflowSnapshot[]> {
-  const rawWorkflows = await safeFindAll(db, 'workflows');
-  const rawNodes = await safeFindAll(db, 'flow_nodes');
+  const rawWorkflows = await safeFindAll(db, 'workflows', { sort: ['key'] });
+  const rawNodes = await safeFindAll(db, 'flow_nodes', { sort: ['id'] });
 
   const nodesByWorkflowId = new Map<number, Record<string, unknown>[]>();
   const nodeKeyById = new Map<number, string>();
@@ -234,8 +234,8 @@ function sanitizeRoleResource(raw: Record<string, unknown>, roleName: string): R
 }
 
 async function exportACL(db: Database): Promise<{ roles: RoleSnapshot[]; rolesResources: RoleResourceSnapshot[] }> {
-  const rawRoles = await safeFindAll(db, 'roles');
-  const rawResources = await safeFindAll(db, 'rolesResources', { appends: ['actions'] });
+  const rawRoles = await safeFindAll(db, 'roles', { sort: ['name'] });
+  const rawResources = await safeFindAll(db, 'rolesResources', { appends: ['actions'], sort: ['roleName', 'name'] });
 
   const roles = rawRoles.map(sanitizeRole);
   const rolesResources = rawResources.map((r) =>
@@ -282,8 +282,8 @@ async function exportUIBlueprints(db: Database): Promise<{
   uiSchemas: UISchemaSnapshot[];
   desktopRoutes: DesktopRouteSnapshot[];
 }> {
-  const rawSchemas = await safeFindAll(db, 'uiSchemas');
-  const rawRoutes = await safeFindAll(db, 'desktopRoutes', { sort: ['sort'] });
+  const rawSchemas = await safeFindAll(db, 'uiSchemas', { sort: ['x-uid'] });
+  const rawRoutes = await safeFindAll(db, 'desktopRoutes', { sort: ['sort', 'id'] });
 
   return {
     uiSchemas: rawSchemas.map(sanitizeUISchema),

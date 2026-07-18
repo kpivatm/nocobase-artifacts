@@ -1,7 +1,7 @@
 import type { BackupInfo, RollbackResult } from './types';
 
 // Application type is typed loosely to avoid hard dependency on @nocobase/server internals.
-type NocoBaseApp = {
+export type NocoBaseApp = {
   getPlugin: (name: string) => unknown;
   resourceManager: {
     getAction: (resource: string, action: string) => ((ctx: unknown, next: () => Promise<void>) => Promise<void>) | undefined;

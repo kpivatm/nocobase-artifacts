@@ -3,15 +3,21 @@ import type { Transaction } from 'sequelize';
 import { diffBundles } from './diff';
 import { exportBundle } from './bundle';
 import { createBackup } from './backup';
+import type { NocoBaseApp } from './backup';
 import type {
   ApplyResult,
   ApplyResultEntry,
   BackupInfo,
   Bundle,
+  CollectionSnapshot,
+  DesktopRouteSnapshot,
   DiffEntry,
+  FieldSnapshot,
   FlowNodeSnapshot,
   MigrationConfig,
   MigrationRule,
+  RoleResourceSnapshot,
+  RoleSnapshot,
   UISchemaSnapshot,
   WorkflowSnapshot,
 } from './types';
@@ -293,7 +299,6 @@ async function addNodeToExistingWorkflow(
 
 interface UiSchemaRepository {
   insert(data: Record<string, unknown>, options?: Record<string, unknown>): Promise<void>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   update(opts: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -383,7 +388,7 @@ async function applyEntry(
 
   if (entry.type === 'collection') {
     const repo = db.getRepository('collections');
-    const colSrc = entry.source as Record<string, any>;
+    const colSrc = entry.source as CollectionSnapshot;
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: colSrc, ...txOpt });
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
@@ -394,7 +399,7 @@ async function applyEntry(
 
   if (entry.type === 'field') {
     const repo = db.getRepository('fields');
-    const src = entry.source as Record<string, any>;
+    const src = entry.source as FieldSnapshot;
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
@@ -452,7 +457,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'role') {
-    const src = entry.source as Record<string, any>;
+    const src = entry.source as RoleSnapshot;
     const repo = db.getRepository('roles');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
@@ -463,7 +468,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'roles_resource') {
-    const src = entry.source as Record<string, any>;
+    const src = entry.source as RoleResourceSnapshot;
     const repo = db.getRepository('rolesResources');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
@@ -482,7 +487,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'desktop_route') {
-    const src = entry.source as Record<string, any>;
+    const src = entry.source as DesktopRouteSnapshot;
     const repo = db.getRepository('desktopRoutes');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
@@ -508,9 +513,6 @@ function checkVersionCompat(source: Bundle, targetNocobaseVersion: string | unde
 }
 
 // ─── Main apply ───────────────────────────────────────────────────────────────
-
-// App type used only for backup; loosely typed to avoid hard dependency.
-type NocoBaseApp = Parameters<typeof createBackup>[0];
 
 export async function applyBundle(
   db: Database,
