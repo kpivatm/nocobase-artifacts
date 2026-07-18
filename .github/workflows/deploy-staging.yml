@@ -1,36 +1,134 @@
 name: Deploy to Staging
 
+# New flow (Stage 4): export bundle from Dev → diff review → apply via plugin CLI
+# Bundle is never committed to git (CF-2): it lives only in the CI runner and as a
+# short-lived private artifact accessible only to users with repo access.
+#
+# Required secrets:
+#   DEV_NOCOBASE_URL        — Dev instance base URL
+#   DEV_NOCOBASE_API_TOKEN  — API token for dev instance (plugin-config-migration)
+#   STAGING_NOCOBASE_URL        — Staging instance base URL
+#   STAGING_NOCOBASE_API_TOKEN  — API token for staging instance
+#
+# Required GitHub environment: "staging" (configure required reviewers for apply gate)
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'modules/**'
   workflow_dispatch:
     inputs:
       module:
         description: 'Module to deploy (e.g. kpi)'
         required: true
         default: 'kpi'
+      dry_run:
+        description: 'Dry run — show diff only, no changes written'
+        type: boolean
+        default: false
 
 jobs:
-  deploy-staging:
+  # ─── Job 1: Export bundle from Dev and diff against Staging ────────────────
+  export-and-diff:
+    name: Export bundle & diff
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.diff.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export config bundle from Dev
+        run: |
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            export --out /tmp/bundle.json
+          echo "Bundle size: $(wc -c < /tmp/bundle.json) bytes"
+        env:
+          NOCOBASE_URL: ${{ secrets.DEV_NOCOBASE_URL }}
+          NOCOBASE_API_TOKEN: ${{ secrets.DEV_NOCOBASE_API_TOKEN }}
+
+      - name: Upload bundle artifact (private — not committed to git, CF-2)
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-bundle-${{ github.run_id }}
+          path: /tmp/bundle.json
+          retention-days: 1
+
+      - name: Diff bundle against Staging
+        id: diff
+        run: |
+          set +e
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            diff --source /tmp/bundle.json
+          DIFF_EXIT=$?
+          # Exit 1 = has changes (not an error); exit 2+ = actual error
+          if [ $DIFF_EXIT -eq 1 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          elif [ $DIFF_EXIT -eq 0 ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected — staging is already up to date."
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Diff command failed (exit $DIFF_EXIT); inspect logs above."
+            exit $DIFF_EXIT
+          fi
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}
+
+  # ─── Job 2: Apply to Staging (requires environment approval) ───────────────
+  # Reviewer sees the diff in Job 1 logs before approving this job.
+  # CF-3: Workflows that are new at target will have credentials stripped —
+  # operator must re-enter them in the NocoBase UI after apply (see runbook).
+  apply-staging:
+    name: Apply to Staging
+    needs: export-and-diff
     runs-on: ubuntu-latest
     environment: staging
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up nb CLI
-        run: npm install -g @nocobase/cli@2.1.23
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config-bundle-${{ github.run_id }}
+          path: /tmp
 
-      - name: Apply artifacts to Staging
+      - name: Apply config to Staging (backup-before-apply)
+        id: apply
         run: |
-          MODULE="${{ github.event.inputs.module || 'kpi' }}"
-          bash scripts/apply.sh "$MODULE" staging --yes
+          DRY_RUN_FLAG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+            echo "Dry-run mode — no changes will be written."
+          fi
+
+          # Capture output even on failure so we can extract the backup filename for rollback
+          set +e
+          RESULT=$(node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            apply --source /tmp/bundle.json $DRY_RUN_FLAG 2>&1)
+          APPLY_EXIT=$?
+
+          echo "$RESULT"
+
+          # Extract backup filename from the JSON result for auto-rollback
+          BACKUP_FILE=$(echo "$RESULT" | \
+            node -e "let d=''; process.stdin.on('data',c=>d+=c); \
+              process.stdin.on('end',()=>{ \
+                try { const r=JSON.parse(d); \
+                  console.log((r.data||r).backup?.filename||''); \
+                } catch { console.log(''); } \
+              });" 2>/dev/null || echo "")
+
+          echo "backup_file=$BACKUP_FILE" >> "$GITHUB_OUTPUT"
+          exit $APPLY_EXIT
         env:
           NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
-          NOCOBASE_EMAIL: ${{ secrets.STAGING_NOCOBASE_EMAIL }}
-          NOCOBASE_PASSWORD: ${{ secrets.STAGING_NOCOBASE_PASSWORD }}
-          CI: "true"
+          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}
 
-  # Prod deploy is separate — requires manual trigger + environment protection
-  # See: .github/workflows/deploy-prod.yml (to be created when prod is ready)
+      - name: Auto-rollback on apply failure
+        if: failure() && steps.apply.outputs.backup_file != ''
+        run: |
+          BACKUP="${{ steps.apply.outputs.backup_file }}"
+          echo "Apply failed — initiating rollback to backup: $BACKUP"
+          node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js \
+            rollback --backup-file "$BACKUP"
+        env:
+          NOCOBASE_URL: ${{ secrets.STAGING_NOCOBASE_URL }}
+          NOCOBASE_API_TOKEN: ${{ secrets.STAGING_NOCOBASE_API_TOKEN }}

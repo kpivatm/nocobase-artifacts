@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DEPRECATED — Stage 4 (KPI-38): thay thế bởi CI pipeline dùng plugin-config-migration CLI.
+# Dùng: GitHub Actions → Deploy to Staging → Run workflow
+# Hoặc: node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js apply --source bundle.json
+# Script này giữ lại chỉ để tham khảo; sẽ xóa sau khi pipeline mới ổn định.
+#
 # Apply NocoBase artifacts lên instance chỉ định.
 # Usage: ./scripts/apply.sh [module] [env] [--yes]
 # Example: ./scripts/apply.sh kpi staging

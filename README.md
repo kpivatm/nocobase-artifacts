@@ -9,27 +9,44 @@ NocoBase blueprint artifacts cho tất cả phân hệ trên instance kpi-poc (`
 ```
 modules/
   kpi/
-    collections/    # JSON schema collections (export từ NocoBase)
-    blueprints/     # Page/block blueprints (flow-surfaces export-blueprint)
+    collections/    # JSON schema collections (legacy format — tham khảo)
+    blueprints/     # Page/block blueprints (legacy format — tham khảo)
     js-blocks/      # Source JS block custom
   shared/
     collections/    # Collections dùng chung giữa các phân hệ
+packages/plugins/@kpi/plugin-config-migration/
+  bin/config-migration.js  # CLI: export / diff / apply / rollback
+  src/                     # Plugin source (TypeScript)
 scripts/
-  export.sh         # Export artifact từ NocoBase instance
-  apply.sh          # Apply artifact lên target instance
-  rollback.sh       # Rollback bằng revision/backup
+  export.sh         # [DEPRECATED] Dùng config-migration CLI thay thế
+  apply.sh          # [DEPRECATED] Dùng CI pipeline thay thế
+  rollback.sh       # Vẫn dùng được (hoặc dùng config-migration rollback)
 envs/
   dev.env.example   # Template biến môi trường dev
   staging.env.example
   prod.env.example
+docs/
+  deploy-pipeline.md  # Deploy runbook (flow mới dùng plugin-config-migration)
 .github/workflows/
-  validate.yml      # Validate blueprint format trên PR
-  deploy-staging.yml # Auto-apply lên staging khi merge main
+  validate.yml       # Validate blueprint format trên PR
+  deploy-staging.yml # Manual deploy: export from dev → diff review → apply staging
 ```
 
 ## Deploy Runbook
 
-Xem chi tiết: [deploy-pipeline.md](https://github.com/kpivatm/doc/blob/master/02-platform/deployment/deploy-pipeline.md)
+Xem chi tiết: [docs/deploy-pipeline.md](./docs/deploy-pipeline.md)
+
+### Quick start (deploy staging)
+
+1. GitHub Actions → **Deploy to Staging** → **Run workflow**
+2. Chọn module (mặc định: `kpi`), bỏ chọn `dry_run`
+3. Approve job `apply-staging` sau khi review diff log ở job `export-and-diff`
+
+> **Lưu ý CF-2**: Bundle không được commit vào git. Bundle chỉ tồn tại dưới dạng private CI artifact (1 ngày retention).
+>
+> **Lưu ý CF-3**: Workflow mới ở target (action `add`) sẽ bị strip credential. Operator phải nhập lại credential trong NocoBase UI sau apply.
+>
+> **CF-1 (chưa verify)**: Backup-before-apply chưa được chạy thật trên instance có Backup Manager. Cần verify thủ công trước khi enable auto-apply vào prod.
 
 ## Branch convention
 
