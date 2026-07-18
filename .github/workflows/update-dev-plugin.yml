@@ -44,28 +44,23 @@ jobs:
           test -f lib/server/plugin.js || (echo "ERROR: lib/server/plugin.js not built" && exit 1)
           echo "Server lib built OK"
 
-      - name: Locate docker binary and set DOCKER_BIN
+      - name: Diagnose environment and find NocoBase source
         run: |
-          echo "PATH=$PATH"
           echo "whoami=$(whoami)"
-          # Broad search for docker binary
-          DOCKER=$(which docker 2>/dev/null || true)
-          if [ -z "$DOCKER" ]; then
-            DOCKER=$(find /usr /home /opt /snap /root /var -name 'docker' -type f -perm /0111 2>/dev/null | grep -v compose | head -1 || true)
-          fi
-          # Also try sudo docker if available
-          if [ -z "$DOCKER" ] && sudo -n docker --version > /dev/null 2>&1; then
-            DOCKER="sudo docker"
-          fi
-          if [ -z "$DOCKER" ]; then
-            echo "ERROR: docker not found. Listing potential locations:"
-            ls /usr/bin/docker* /usr/local/bin/docker* /snap/bin/docker* 2>/dev/null || true
-            ls -la /var/run/docker.sock 2>/dev/null || echo "No docker socket"
-            exit 1
-          fi
-          echo "Docker found: $DOCKER"
-          $DOCKER --version
-          echo "DOCKER_BIN=$DOCKER" >> "$GITHUB_ENV"
+          echo "hostname=$(hostname)"
+          echo "uname=$(uname -a)"
+          # Check if host filesystem is accessible
+          echo "--- /host or bind-mounted paths ---"
+          ls /host 2>/dev/null || echo "No /host"
+          ls /var/run/docker.sock 2>/dev/null || echo "No docker socket at /var/run/docker.sock"
+          find /run /tmp -name 'docker.sock' 2>/dev/null | head -3 || true
+          # Check if NocoBase source is accessible
+          echo "--- /home/bks check ---"
+          ls /home/bks 2>/dev/null || echo "No /home/bks"
+          ls /home/bks/kpi/04-Source-Code/packages/plugins/@kpi/ 2>/dev/null || echo "No access to kpi source"
+          # List mounts
+          echo "--- mounts ---"
+          cat /proc/mounts 2>/dev/null | grep -v "proc\|sys\|tmpfs\|cgroup\|devpts" | head -20 || true
 
       - name: Find plugin path inside container
         id: plugin-path
