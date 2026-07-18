@@ -2,16 +2,23 @@ import { Plugin } from '@nocobase/server';
 import { exportBundle } from './bundle';
 import { diffBundles } from './diff';
 import { applyBundle } from './apply';
-import { createBackup, restoreBackup } from './backup';
+import { createBackup, restoreBackup, BackupApiConfig } from './backup';
 
 const PLUGIN_NAME = 'plugin-config-migration';
 const PLUGIN_VERSION = '0.3.0';
 
+// Extract BackupApiConfig from a Koa request context.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function backupConfig(ctx: any): BackupApiConfig {
+  const auth: string = ctx.headers?.authorization ?? '';
+  const token = auth.replace(/^Bearer\s+/i, '');
+  // ctx.origin = protocol + host (e.g. http://192.168.145.231:13000)
+  const baseUrl: string = ctx.origin ?? ctx.request?.origin ?? 'http://localhost:13000';
+  return { baseUrl, token };
+}
+
 export class PluginConfigMigrationServer extends Plugin {
   async load() {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const plugin = this;
-
     this.app.resourceManager.define({
       name: PLUGIN_NAME,
       actions: {
@@ -34,12 +41,11 @@ export class PluginConfigMigrationServer extends Plugin {
 
         // POST /api/plugin-config-migration:backup
         // Response: BackupInfo { available, filename?, createdAt? }
-        // 200 + available=false when Backup Manager plugin is not installed.
+        // 200 + available=false when Backup Manager plugin is not installed (backup:create → 404).
         // 200 + filename when backup succeeds.
         // 500 when Backup Manager is installed but backup creation fails.
         backup: async (ctx, next) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await createBackup(plugin.app as any);
+          const result = await createBackup(backupConfig(ctx));
           ctx.body = result;
           await next();
         },
@@ -69,9 +75,8 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const app = backup !== false ? (plugin.app as any) : undefined;
-          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, app);
+          const cfg = backup !== false ? backupConfig(ctx) : undefined;
+          const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, cfg);
           ctx.body = result;
           await next();
         },
@@ -86,8 +91,7 @@ export class PluginConfigMigrationServer extends Plugin {
             await next();
             return;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await restoreBackup(plugin.app as any, filename);
+          const result = await restoreBackup(backupConfig(ctx), filename);
           ctx.body = result;
           await next();
         },

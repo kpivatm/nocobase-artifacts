@@ -162,7 +162,7 @@ async function cmdBackup(baseUrl, token, printFilename) {
   } else {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     if (!result.available) {
-      process.stderr.write('Info: Backup Manager plugin (@nocobase/plugin-backup-restore) is not installed on this instance.\n');
+      process.stderr.write('Info: Backup Manager plugin is not available on this instance (backup:create action not registered).\n');
       process.exitCode = 1;
     } else if (!result.filename) {
       process.stderr.write('Warning: backup succeeded but returned no filename.\n');

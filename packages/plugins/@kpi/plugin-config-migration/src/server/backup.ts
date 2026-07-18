@@ -1,130 +1,129 @@
+import * as http from 'http';
+import * as https from 'https';
 import type { BackupInfo, RollbackResult } from './types';
 
-// Application type is typed loosely to avoid hard dependency on @nocobase/server internals.
-type NocoBaseApp = {
-  getPlugin: (name: string) => unknown;
-  resourceManager: {
-    getAction: (resource: string, action: string) => ((ctx: unknown, next: () => Promise<void>) => Promise<void>) | undefined;
-  };
-};
-
-interface BackupFileRecord {
-  name: string;
-  createdAt?: string;
+// Config passed from action handlers to use the Backup Manager API via HTTP loopback.
+// Using HTTP loopback instead of app.resourceManager.getAction() because the backup
+// plugin (verified on NocoBase 2.1.22: @nocobase/plugin-backups) registers its actions
+// through a mechanism not exposed via resourceManager.getAction().
+export interface BackupApiConfig {
+  baseUrl: string; // e.g. http://192.168.145.231:13000
+  token: string;   // Bearer token from the originating request
 }
 
-interface BackupCreateContext {
-  body: BackupFileRecord | null;
+interface ApiResponse {
   status: number;
-}
-
-interface BackupRestoreContext {
-  action: { params: { filterByTk: string } };
   body: unknown;
-  status: number;
 }
 
-const BACKUP_RESTORE_PLUGIN = '@nocobase/plugin-backup-restore';
-
-function isBackupRestoreAvailable(app: NocoBaseApp): boolean {
-  try {
-    const plugin = app.getPlugin(BACKUP_RESTORE_PLUGIN);
-    return plugin != null;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Create a full backup via the Backup Manager plugin.
- * Returns { available: false } when the plugin is not installed.
- */
-export async function createBackup(app: NocoBaseApp): Promise<BackupInfo> {
-  if (!isBackupRestoreAvailable(app)) {
-    return { available: false };
-  }
-
-  const createAction = app.resourceManager.getAction('backupFiles', 'create');
-  if (!createAction) {
-    return { available: false };
-  }
-
-  // NOTE: This calls the backupFiles:create action with a minimal context.
-  // The Backup Manager action must complete synchronously (or at least set ctx.body
-  // before returning) for this to work. If the plugin runs backup asynchronously
-  // and returns before the file is written, ctx.body will be null and we will throw.
-  // VERIFY on the target instance: applyBundle(backup=true) → check backup file exists
-  // and is non-empty → rollback restores correct state.
-  const ctx: BackupCreateContext = { body: null, status: 200 };
-
-  try {
-    await createAction(ctx, async () => {});
-    if (ctx.body && ctx.body.name) {
-      return {
-        available: true,
-        filename: ctx.body.name,
-        createdAt: ctx.body.createdAt ?? new Date().toISOString(),
-      };
-    }
-    // Backup action returned without a filename. This happens when the plugin runs
-    // asynchronously or requires params.values that were not provided.
-    // Fail loudly: proceeding without a valid backup defeats the safety-net.
-    throw new Error(
-      'backupFiles:create returned without a filename. ' +
-      'The backup may be async or may require params.values. ' +
-      'Verify the Backup Manager plugin is synchronous on this instance, ' +
-      'or disable backup (backup=false) if this instance does not support it.',
+function apiRequest(baseUrl: string, token: string, path: string, method: string, payload?: unknown): Promise<ApiResponse> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(path, baseUrl);
+    const lib = urlObj.protocol === 'https:' ? https : http;
+    const bodyStr = payload ? JSON.stringify(payload) : undefined;
+    const req = lib.request(
+      {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80'),
+        path: urlObj.pathname + urlObj.search,
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode ?? 0, body: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode ?? 0, body: data });
+          }
+        });
+      },
     );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Backup creation failed: ${message}`);
-  }
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
 }
 
 /**
- * Restore from a previously created backup.
- * The filename must be a value returned by a prior createBackup() call.
+ * Create a full backup via the Backup Manager plugin HTTP API (backup:create).
+ * Returns { available: false } when the Backup Manager plugin is not installed
+ * (i.e. the endpoint returns 404).
+ * Throws when the backup API is reachable but fails (e.g. pg_dump not installed,
+ * permissions, etc.) — the pre-backup CI step must hard-fail in this case.
  */
-export async function restoreBackup(app: NocoBaseApp, filename: string): Promise<RollbackResult> {
-  if (!isBackupRestoreAvailable(app)) {
-    return {
-      success: false,
-      filename,
-      restoredAt: new Date().toISOString(),
-      error: 'Backup Manager plugin (@nocobase/plugin-backup-restore) is not installed',
-    };
-  }
-
-  const restoreAction = app.resourceManager.getAction('backupFiles', 'restore');
-  if (!restoreAction) {
-    return {
-      success: false,
-      filename,
-      restoredAt: new Date().toISOString(),
-      error: 'backupFiles:restore action not found',
-    };
-  }
-
-  const ctx: BackupRestoreContext = {
-    action: { params: { filterByTk: filename } },
-    body: null,
-    status: 200,
-  };
-
+export async function createBackup(config: BackupApiConfig): Promise<BackupInfo> {
+  let res: ApiResponse;
   try {
-    await restoreAction(ctx, async () => {});
-    return {
-      success: true,
-      filename,
-      restoredAt: new Date().toISOString(),
-    };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    res = await apiRequest(config.baseUrl, config.token, '/api/backup:create', 'POST', {});
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Backup HTTP loopback failed (network): ${msg}. baseUrl=${config.baseUrl}`);
+  }
+
+  if (res.status === 404) {
+    return { available: false };
+  }
+
+  if (res.status >= 400) {
+    const body = res.body as Record<string, unknown>;
+    const errMsg = (body?.errors as Array<{ message: string }>)?.[0]?.message
+      ?? JSON.stringify(res.body);
+    throw new Error(`Backup creation failed (HTTP ${res.status}): ${errMsg}`);
+  }
+
+  const body = res.body as Record<string, unknown>;
+  const filename = body?.name as string | undefined;
+  if (!filename) {
+    throw new Error(
+      'backup:create returned without a filename. ' +
+      'Verify the Backup Manager plugin is functioning on this instance.',
+    );
+  }
+
+  return {
+    available: true,
+    filename,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Restore from a previously created backup via the Backup Manager plugin HTTP API.
+ */
+export async function restoreBackup(config: BackupApiConfig, filename: string): Promise<RollbackResult> {
+  const res = await apiRequest(config.baseUrl, config.token, '/api/backup:restore', 'POST', { name: filename });
+
+  if (res.status === 404) {
     return {
       success: false,
       filename,
       restoredAt: new Date().toISOString(),
-      error: `Restore failed: ${message}`,
+      error: 'backup:restore endpoint not found — Backup Manager plugin may not be installed',
     };
   }
+
+  if (res.status >= 400) {
+    const body = res.body as Record<string, unknown>;
+    const errMsg = (body?.errors as Array<{ message: string }>)?.[0]?.message
+      ?? JSON.stringify(res.body);
+    return {
+      success: false,
+      filename,
+      restoredAt: new Date().toISOString(),
+      error: `Restore failed (HTTP ${res.status}): ${errMsg}`,
+    };
+  }
+
+  return {
+    success: true,
+    filename,
+    restoredAt: new Date().toISOString(),
+  };
 }
