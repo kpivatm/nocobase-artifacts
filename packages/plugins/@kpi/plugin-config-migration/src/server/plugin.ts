@@ -34,7 +34,7 @@ export class PluginConfigMigrationServer extends Plugin {
 
         // POST /api/plugin-config-migration:diff
         diff: async (ctx, next) => {
-          const { source, target } = ctx.action.params.values ?? {};
+          const { source, target } = ctx.action!.params.values ?? {};
           if (!source || !target) {
             ctx.status = 400;
             ctx.body = { error: 'Both source and target bundles are required.' };
@@ -50,14 +50,15 @@ export class PluginConfigMigrationServer extends Plugin {
         // Body: { source: Bundle, dryRun?: boolean, migrationConfig?: MigrationConfig, backup?: boolean }
         // Response includes backup.filename when backup=true and Backup Manager is available.
         apply: async (ctx, next) => {
-          const { source, dryRun, migrationConfig, backup } = ctx.action.params.values ?? {};
+          const { source, dryRun, migrationConfig, backup } = ctx.action!.params.values ?? {};
           if (!source) {
             ctx.status = 400;
             ctx.body = { error: 'source bundle is required.' };
             await next();
             return;
           }
-          const app = backup !== false ? plugin.app : undefined;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const app = backup !== false ? (plugin.app as any) : undefined;
           const result = await applyBundle(ctx.db, source, migrationConfig ?? {}, dryRun ?? false, app);
           ctx.body = result;
           await next();
@@ -66,14 +67,15 @@ export class PluginConfigMigrationServer extends Plugin {
         // POST /api/plugin-config-migration:rollback
         // Body: { filename: string } — filename from a prior apply response's backup.filename
         rollback: async (ctx, next) => {
-          const { filename } = ctx.action.params.values ?? {};
+          const { filename } = ctx.action!.params.values ?? {};
           if (!filename) {
             ctx.status = 400;
             ctx.body = { error: 'filename is required (from a prior apply backup.filename).' };
             await next();
             return;
           }
-          const result = await restoreBackup(plugin.app, filename);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await restoreBackup(plugin.app as any, filename);
           ctx.body = result;
           await next();
         },

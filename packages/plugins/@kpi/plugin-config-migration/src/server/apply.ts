@@ -383,17 +383,18 @@ async function applyEntry(
 
   if (entry.type === 'collection') {
     const repo = db.getRepository('collections');
+    const colSrc = entry.source as Record<string, any>;
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
-      await repo.create({ values: entry.source, ...txOpt });
+      await repo.create({ values: colSrc, ...txOpt });
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
-      await repo.update({ filter: { name: (entry.source as Record<string, unknown>).name }, values: entry.source, ...txOpt });
+      await repo.update({ filter: { name: colSrc.name }, values: colSrc, ...txOpt });
     }
     return { status: 'ok' };
   }
 
   if (entry.type === 'field') {
     const repo = db.getRepository('fields');
-    const src = entry.source as Record<string, unknown>;
+    const src = entry.source as Record<string, any>;
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
     } else if (entry.action === 'update' && rule === 'insert-or-update') {
@@ -451,7 +452,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'role') {
-    const src = entry.source as Record<string, unknown>;
+    const src = entry.source as Record<string, any>;
     const repo = db.getRepository('roles');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
@@ -462,7 +463,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'roles_resource') {
-    const src = entry.source as Record<string, unknown>;
+    const src = entry.source as Record<string, any>;
     const repo = db.getRepository('rolesResources');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
@@ -481,7 +482,7 @@ async function applyEntry(
   }
 
   if (entry.type === 'desktop_route') {
-    const src = entry.source as Record<string, unknown>;
+    const src = entry.source as Record<string, any>;
     const repo = db.getRepository('desktopRoutes');
     if (entry.action === 'add' && (rule === 'insert' || rule === 'insert-or-update')) {
       await repo.create({ values: src, ...txOpt });
