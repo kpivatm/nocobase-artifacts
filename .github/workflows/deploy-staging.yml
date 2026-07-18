@@ -32,7 +32,7 @@ jobs:
   # ─── Job 1: Export bundle from Dev and diff against Staging ────────────────
   export-and-diff:
     name: Export bundle & diff
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, kpivatm]
     outputs:
       has_changes: ${{ steps.diff.outputs.has_changes }}
     steps:
@@ -119,7 +119,7 @@ jobs:
   apply-staging:
     name: Apply to Staging
     needs: export-and-diff
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, kpivatm]
     environment: staging
     steps:
       - uses: actions/checkout@v4
