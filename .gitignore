@@ -2,6 +2,11 @@
 *.env
 !*.env.example
 
+# Config migration bundles — contain potentially sensitive config; never commit plaintext (CF-2)
+bundle.json
+bundle-*.json
+*.bundle.json
+
 # OS
 .DS_Store
 Thumbs.db

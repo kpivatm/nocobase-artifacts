@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# DEPRECATED — Stage 4 (KPI-38): thay thế bởi plugin-config-migration CLI.
+# Dùng: node packages/plugins/@kpi/plugin-config-migration/bin/config-migration.js export --out bundle.json
+# Script này giữ lại chỉ để tham khảo; sẽ xóa sau khi pipeline mới ổn định.
+#
 # Export NocoBase artifacts từ instance chỉ định về repo này.
 # Usage: ./scripts/export.sh [module] [env]
 # Example: ./scripts/export.sh kpi dev
