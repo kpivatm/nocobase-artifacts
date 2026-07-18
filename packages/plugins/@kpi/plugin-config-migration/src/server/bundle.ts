@@ -38,7 +38,9 @@ async function safeFindAll(db: Database, repoName: string, opts: Record<string, 
   // Only suppress errors for repos that don't exist (optional domains like workflows on fresh instances).
   // Real query failures must propagate so the caller sees an accurate diff, not a spurious all-add.
   if (!hasRepo(db, repoName)) return [];
-  const rows = await db.getRepository(repoName).find({ sort: ['id'], ...opts });
+  // No default sort — different collections use different primary keys (name, x-uid, id).
+  // Callers that need deterministic ordering pass sort explicitly via opts.
+  const rows = await db.getRepository(repoName).find({ ...opts });
   return rows.map(toJSON);
 }
 
@@ -281,7 +283,7 @@ async function exportUIBlueprints(db: Database): Promise<{
   desktopRoutes: DesktopRouteSnapshot[];
 }> {
   const rawSchemas = await safeFindAll(db, 'uiSchemas');
-  const rawRoutes = await safeFindAll(db, 'desktopRoutes', { sort: ['sort', 'id'] });
+  const rawRoutes = await safeFindAll(db, 'desktopRoutes', { sort: ['sort'] });
 
   return {
     uiSchemas: rawSchemas.map(sanitizeUISchema),
